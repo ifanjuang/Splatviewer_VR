@@ -21,10 +21,12 @@ This fork is based on [aras-p/UnityGaussianSplatting](https://github.com/aras-p/
 ## Viewer Features
 
 - Runtime loading of `.ply` and `.spz` splat files.
+- Command-line file opening for `.ply` and `.spz` shell associations.
 - OpenXR-based VR support.
 - Smooth locomotion and snap turn.
 - Controller buttons for moving between splat files.
-- Keyboard and mouse fallback when running without a headset.
+- Full desktop mode when running without a headset.
+- Fullscreen windowed startup for desktop and VR mirror view.
 
 ## Controls
 
@@ -39,10 +41,14 @@ This fork is based on [aras-p/UnityGaussianSplatting](https://github.com/aras-p/
 ### Desktop fallback
 
 - `W A S D`: move.
-- `Q / E`: move down / up.
-- Hold right mouse button: look around.
-- `PageDown` or `N`: next splat.
-- `PageUp` or `P`: previous splat.
+- Mouse: look around.
+- `SPACE / C`: move up / down.
+- `R / F`: next / previous splat.
+- `Q / E`: rotate the current splat.
+- `Home`: reset splat rotation.
+- `End`: flip the current splat.
+- `Esc`: release mouse cursor.
+- Left click: capture mouse cursor again.
 
 ## Unity Project
 
@@ -67,6 +73,22 @@ Highlights:
 - Splats are reordered and uploaded in a GPU-friendly layout.
 
 The source tree does not include sample splat data. Add your own `.ply` or `.spz` files and point the viewer to the folder you want to browse.
+
+If the viewer is launched with a `.ply` or `.spz` file path on the command line, it will automatically load that file on startup. This is the basis for Windows Explorer file associations.
+
+## Windows File Association
+
+You can register `.ply` and `.spz` to open with the viewer by running:
+
+- `tools/Register-SplatviewerFileAssociations.cmd`
+- or `tools/Register-SplatviewerFileAssociations.ps1`
+
+The helper writes per-user file associations under `HKCU\Software\Classes`, so administrator rights are not required.
+
+If needed, pass a custom executable path to the PowerShell script:
+
+- `Register-SplatviewerFileAssociations.ps1 -ExecutablePath "C:\Path\To\SplatViewer_VR.exe"`
+- `Register-SplatviewerFileAssociations.ps1 -Unregister`
 
 ## Building A Release
 

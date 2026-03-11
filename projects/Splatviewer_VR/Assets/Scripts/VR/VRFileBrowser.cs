@@ -532,9 +532,14 @@ public class VRFileBrowser : MonoBehaviour
             + "Enter: open / load\n"
             + "Backspace: parent folder\n\n"
             + "Scene\n"
-            + "Arrow keys: rotate\n"
-            + "R: reset rotation\n"
-            + "F: flip upside down";
+                + "Mouse: look\n"
+                + "WASD: move\n"
+                + "Space / C: up / down\n"
+                + "R / F: next / previous splat\n"
+                + "Q / E: rotate splat\n"
+                + "Esc: release mouse, Left Click: capture mouse\n"
+                + "Home: reset rotation\n"
+                + "End: flip upside down";
     }
 
     void EnsureVisible()

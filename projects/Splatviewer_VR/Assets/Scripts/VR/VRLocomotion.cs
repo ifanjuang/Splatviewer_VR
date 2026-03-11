@@ -38,6 +38,9 @@ public class VRLocomotion : MonoBehaviour
     [Tooltip("Mouse look sensitivity when using the keyboard fallback.")]
     public float mouseSensitivity = 2f;
 
+    [Tooltip("Hide and lock the cursor while using desktop mode.")]
+    public bool lockCursorInDesktopMode = true;
+
     // ── Private state ─────────────────────────────────────────────────────────
 
     VRRig  _rig;
@@ -51,6 +54,15 @@ public class VRLocomotion : MonoBehaviour
     {
         _rig = GetComponent<VRRig>();
         _browser = FindAnyObjectByType<VRFileBrowser>();
+
+        Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
+        if (cam != null)
+        {
+            float pitch = cam.transform.localEulerAngles.x;
+            if (pitch > 180f)
+                pitch -= 360f;
+            _mousePitch = pitch;
+        }
     }
 
     void Update()
@@ -122,17 +134,35 @@ public class VRLocomotion : MonoBehaviour
 
     void KeyboardMouseFallback()
     {
+        if (_browser != null && _browser.IsOpen)
+            return;
+
+        UpdateDesktopCursorState();
+
         // Translation
         float h = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
         float v = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
-        float y = (Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f);
+        float y = (Input.GetKey(KeyCode.Space) ? 1f : 0f) - (Input.GetKey(KeyCode.C) ? 1f : 0f);
 
-        Vector3 dir = new Vector3(h, y, v);
-        if (dir.sqrMagnitude > 0.01f)
-            transform.position += transform.TransformDirection(dir.normalized) * moveSpeed * Time.deltaTime;
+        Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
+        Vector3 forward = cam != null ? cam.transform.forward : transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+            forward = transform.forward;
+        forward.Normalize();
 
-        // Mouse look while right-mouse-button held
-        if (Input.GetMouseButton(1))
+        Vector3 right = cam != null ? cam.transform.right : transform.right;
+        right.y = 0f;
+        if (right.sqrMagnitude < 0.001f)
+            right = transform.right;
+        right.Normalize();
+
+        Vector3 move = (right * h + forward * v + Vector3.up * y);
+        if (move.sqrMagnitude > 0.01f)
+            transform.position += move.normalized * moveSpeed * Time.deltaTime;
+
+        bool allowMouseLook = !lockCursorInDesktopMode || Cursor.lockState == CursorLockMode.Locked;
+        if (allowMouseLook)
         {
             float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
             float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
@@ -142,13 +172,35 @@ public class VRLocomotion : MonoBehaviour
             _mousePitch -= mouseY;
             _mousePitch  = Mathf.Clamp(_mousePitch, -80f, 80f);
 
-            Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
             if (cam != null)
             {
                 Vector3 euler = cam.transform.localEulerAngles;
                 euler.x = _mousePitch;
                 cam.transform.localEulerAngles = euler;
             }
+        }
+    }
+
+    void UpdateDesktopCursorState()
+    {
+        if (!lockCursorInDesktopMode)
+            return;
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            return;
+        }
+
+        if (Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+        else if (Cursor.lockState == CursorLockMode.Locked)
+        {
+            Cursor.visible = false;
         }
     }
 

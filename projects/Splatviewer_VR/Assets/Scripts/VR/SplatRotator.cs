@@ -9,11 +9,14 @@ using UnityEngine.XR;
 /// Attach this to the same GameObject that has GaussianSplatRenderer.
 ///
 /// Desktop controls:
+///   Q / E                → rotate around Y axis
+///
+/// Legacy desktop controls are still available:
 ///   Arrow Left / Right   → rotate around Y axis
 ///   Arrow Up / Down      → rotate around X axis
 ///   , / .                → rotate around Z axis
-///   R                    → reset to original rotation
-///   F                    → flip upside down (180° on X) — quick fix for inverted splats
+///   Home                 → reset to original rotation
+///   End                  → flip upside down
 ///
 /// VR controls (hold LEFT GRIP, then use RIGHT STICK):
 ///   Right stick X        → rotate around Y
@@ -106,8 +109,13 @@ public class SplatRotator : MonoBehaviour
 
     void KeyboardRotate()
     {
+        if (_browser != null && _browser.IsOpen)
+            return;
+
         float dt = rotationSpeed * Time.deltaTime;
 
+        if (Input.GetKey(KeyCode.Q))          transform.Rotate(Vector3.up,    -dt, Space.World);
+        if (Input.GetKey(KeyCode.E))          transform.Rotate(Vector3.up,     dt, Space.World);
         if (Input.GetKey(KeyCode.LeftArrow))  transform.Rotate(Vector3.up,    -dt, Space.World);
         if (Input.GetKey(KeyCode.RightArrow)) transform.Rotate(Vector3.up,     dt, Space.World);
         if (Input.GetKey(KeyCode.UpArrow))    transform.Rotate(Vector3.right,  -dt, Space.World);
@@ -115,8 +123,8 @@ public class SplatRotator : MonoBehaviour
         if (Input.GetKey(KeyCode.Comma))      transform.Rotate(Vector3.forward, -dt, Space.World);
         if (Input.GetKey(KeyCode.Period))     transform.Rotate(Vector3.forward,  dt, Space.World);
 
-        if (Input.GetKeyDown(KeyCode.F)) FlipUpsideDown();
-        if (Input.GetKeyDown(KeyCode.R)) ResetRotation();
+        if (Input.GetKeyDown(KeyCode.End))  FlipUpsideDown();
+        if (Input.GetKeyDown(KeyCode.Home)) ResetRotation();
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────

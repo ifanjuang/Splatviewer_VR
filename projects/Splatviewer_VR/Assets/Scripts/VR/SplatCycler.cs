@@ -14,8 +14,10 @@ using UnityEngine.XR;
 ///   A (primaryButton)   → previous splat file
 ///
 /// Keyboard fallback:
-///   PageDown / N → next
-///   PageUp   / P → previous
+///   R → next
+///   F → previous
+///
+/// Also accepts PageDown/PageUp/N/P as legacy shortcuts.
 /// </summary>
 public class SplatCycler : MonoBehaviour
 {
@@ -186,9 +188,9 @@ public class SplatCycler : MonoBehaviour
 
     void HandleKeyboardInput()
     {
-        if (Input.GetKeyDown(KeyCode.PageDown) || Input.GetKeyDown(KeyCode.N))
+        if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.PageDown) || Input.GetKeyDown(KeyCode.N))
             LoadNext();
-        if (Input.GetKeyDown(KeyCode.PageUp) || Input.GetKeyDown(KeyCode.P))
+        if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.PageUp) || Input.GetKeyDown(KeyCode.P))
             LoadPrevious();
     }
 }
