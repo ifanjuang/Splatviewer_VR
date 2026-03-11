@@ -20,8 +20,8 @@ This fork is based on [aras-p/UnityGaussianSplatting](https://github.com/aras-p/
 
 ## Viewer Features
 
-- Runtime loading of `.ply` and `.spz` splat files.
-- Command-line file opening for `.ply` and `.spz` shell associations.
+- Runtime loading of `.ply`, `.spz`, and bundled PlayCanvas `.sog` splat files.
+- Command-line file opening for `.ply`, `.spz`, and `.sog` shell associations.
 - OpenXR-based VR support.
 - Smooth locomotion and snap turn.
 - Controller buttons for moving between splat files.
@@ -72,13 +72,15 @@ Highlights:
 - `RuntimeSplatLoader` reads binary little-endian PLY data at runtime.
 - Splats are reordered and uploaded in a GPU-friendly layout.
 
-The source tree does not include sample splat data. Add your own `.ply` or `.spz` files and point the viewer to the folder you want to browse.
+The source tree does not include sample splat data. Add your own `.ply`, `.spz`, or bundled `.sog` files and point the viewer to the folder you want to browse.
 
-If the viewer is launched with a `.ply` or `.spz` file path on the command line, it will automatically load that file on startup. This is the basis for Windows Explorer file associations.
+If the viewer is launched with a `.ply`, `.spz`, or `.sog` file path on the command line, it will automatically load that file on startup. This is the basis for Windows Explorer file associations.
+
+PlayCanvas `.sog` support targets bundled `.sog` archives with WebP-backed property images as described in the PlayCanvas format specification.
 
 ## Windows File Association
 
-You can register `.ply` and `.spz` to open with the viewer by running:
+You can register `.ply`, `.spz`, and `.sog` to open with the viewer by running:
 
 - `tools/Register-SplatviewerFileAssociations.cmd`
 - or `tools/Register-SplatviewerFileAssociations.ps1`

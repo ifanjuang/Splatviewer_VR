@@ -8,8 +8,8 @@ Initial public release of the VR-focused Gaussian splat viewer.
 
 - Windows standalone build.
 - OpenXR VR support.
-- Runtime loading for `.ply` and `.spz` splat files.
-- Command-line opening of `.ply` and `.spz` files.
+- Runtime loading for `.ply`, `.spz`, and bundled PlayCanvas `.sog` splat files.
+- Command-line opening of `.ply`, `.spz`, and `.sog` files.
 - VR locomotion with smooth movement and snap turn.
 - Controller-based splat switching.
 - Desktop mode with mouse and keyboard controls when no headset is active.
@@ -40,4 +40,4 @@ Initial public release of the VR-focused Gaussian splat viewer.
 - Bring your own Gaussian splat files.
 - A D3D12-capable Windows system and an OpenXR runtime are recommended.
 - The repository contains source and project files; the downloadable release package contains the built player.
-- Windows file associations can launch the viewer directly with `.ply` or `.spz` files when the executable is registered as the open command.
+- Windows file associations can launch the viewer directly with `.ply`, `.spz`, or `.sog` files when the executable is registered as the open command.

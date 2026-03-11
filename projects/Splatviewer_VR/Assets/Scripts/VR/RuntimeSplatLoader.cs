@@ -9,8 +9,8 @@ using Unity.Mathematics;
 using UnityEngine;
 
 /// <summary>
-/// Loads .ply and .spz Gaussian Splat files at runtime, creating a GaussianSplatAsset
-/// in memory and assigning it to a GaussianSplatRenderer.
+/// Loads .ply, .spz, and bundled PlayCanvas .sog Gaussian Splat files at runtime,
+/// creating a GaussianSplatAsset in memory and assigning it to a GaussianSplatRenderer.
 /// Uses Float32 quality (no chunking) for maximum simplicity.
 /// </summary>
 public class RuntimeSplatLoader : MonoBehaviour
@@ -29,10 +29,10 @@ public class RuntimeSplatLoader : MonoBehaviour
     public static bool IsSupportedFileExtension(string filePath)
     {
         string ext = Path.GetExtension(filePath).ToLowerInvariant();
-        return ext == ".ply" || ext == ".spz";
+        return ext == ".ply" || ext == ".spz" || ext == ".sog";
     }
 
-    /// <summary>Load a .ply or .spz file from disk and display it.</summary>
+    /// <summary>Load a .ply, .spz, or bundled .sog file from disk and display it.</summary>
     public bool LoadFile(string filePath)
     {
         if (!File.Exists(filePath))
@@ -51,7 +51,11 @@ public class RuntimeSplatLoader : MonoBehaviour
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             string ext = Path.GetExtension(filePath).ToLowerInvariant();
-            var splats = ext == ".spz" ? ReadSpz(filePath) : ReadPly(filePath);
+            var splats = ext == ".spz"
+                ? ReadSpz(filePath)
+                : ext == ".sog"
+                    ? PlayCanvasSogReader.ReadFile(filePath)
+                    : ReadPly(filePath);
             if (splats == null || splats.Length == 0)
                 return false;
 
@@ -116,7 +120,7 @@ public class RuntimeSplatLoader : MonoBehaviour
 
     // ── PLY Reader ────────────────────────────────────────────────────────────
 
-    struct SplatData
+    internal struct SplatData
     {
         public float3 pos;
         public float3 dc0;     // color after SH0ToColor (ready for texture)

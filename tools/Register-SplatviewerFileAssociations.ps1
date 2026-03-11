@@ -48,6 +48,7 @@ if ($Unregister) {
     foreach ($subKey in @(
         "$basePath\\.ply",
         "$basePath\\.spz",
+        "$basePath\.sog",
         "$basePath\\$progId"
     )) {
         $keyPath = "HKCU:\$subKey"
@@ -56,7 +57,7 @@ if ($Unregister) {
         }
     }
 
-    Write-Host 'Removed Splatviewer_VR file associations for .ply and .spz.'
+    Write-Host 'Removed Splatviewer_VR file associations for .ply, .spz, and .sog.'
     exit 0
 }
 
@@ -75,11 +76,12 @@ $icon = ('{0},0' -f $ExecutablePath)
 
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\.ply" -Value $progId
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\.spz" -Value $progId
+Set-RegistryKeyDefaultValue -SubKey "$basePath\.sog" -Value $progId
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\$progId" -Value 'Splatviewer Gaussian Splat'
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\$progId\\DefaultIcon" -Value $icon
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\$progId\\shell" -Value 'open'
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\$progId\\shell\\open" -Value 'Open with Splatviewer_VR'
 Set-RegistryKeyDefaultValue -SubKey "$basePath\\$progId\\shell\\open\\command" -Value $command
 
-Write-Host "Registered .ply and .spz to open with: $ExecutablePath"
+Write-Host "Registered .ply, .spz, and .sog to open with: $ExecutablePath"
 Write-Host 'If Explorer does not update immediately, restart Explorer or sign out and back in.'
