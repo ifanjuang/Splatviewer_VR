@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.netpyoung.webp": {
+      "version": "file:com.netpyoung.webp",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.burst": {
       "version": "1.8.28",
       "depth": 1,

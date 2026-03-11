@@ -1,5 +1,25 @@
 # Splatviewer_VR Release Notes
 
+## Version 1.2
+
+Adds runtime PlayCanvas `.sog` loading support, desktop browser access from `Esc`, and follow-up fixes for camera reset and SOG decoding.
+
+### Added
+
+- Runtime loading for bundled PlayCanvas `.sog` files using an embedded WebP decoder.
+- Desktop access to the in-scene file browser with `Esc`, plus keyboard browsing with arrow keys, `Enter`, and `Backspace`.
+
+### Changed
+
+- Desktop camera reset now correctly restores the initial look direction when loading a new splat.
+- Desktop file browser input now cleanly blocks movement and file cycling shortcuts while open.
+
+### Fixed
+
+- Optional higher-order spherical harmonics handling for `.sog` files that only contain `sh0` data.
+- `.sog` scale decoding now converts stored log-scale values back to linear scale before rendering.
+- SOG parser metadata section inheritance compile errors.
+
 ## Version 1.0
 
 Initial public release of the VR-focused Gaussian splat viewer.

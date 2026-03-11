@@ -187,6 +187,9 @@ public class SplatCycler : MonoBehaviour
 
     void HandleKeyboardInput()
     {
+        if (_browser != null && (_browser.IsOpen || _browser.WasOpenThisFrame))
+            return;
+
         if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.PageDown) || Input.GetKeyDown(KeyCode.N))
             LoadNext();
         if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.PageUp) || Input.GetKeyDown(KeyCode.P))

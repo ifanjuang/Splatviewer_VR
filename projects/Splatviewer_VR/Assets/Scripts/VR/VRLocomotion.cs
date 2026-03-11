@@ -156,7 +156,7 @@ public class VRLocomotion : MonoBehaviour
 
     void KeyboardMouseFallback()
     {
-        if (_browser != null && _browser.IsOpen)
+        if (_browser != null && (_browser.IsOpen || _browser.WasOpenThisFrame))
             return;
 
         UpdateDesktopCursorState();

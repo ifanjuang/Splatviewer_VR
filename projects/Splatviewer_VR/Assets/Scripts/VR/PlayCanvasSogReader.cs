@@ -53,10 +53,11 @@ internal static class PlayCanvasSogReader
         ValidateCodebook(meta.scales?.codebook, 256, "scales.codebook");
         ValidateCodebook(meta.sh0?.codebook, 256, "sh0.codebook");
 
+        bool hasHigherOrderSh = HasHigherOrderSh(meta);
         int shCoeffCount = 0;
         DecodedImage shLabels = default;
         DecodedImage shCentroids = default;
-        if (meta.shN != null)
+        if (hasHigherOrderSh)
         {
             if (meta.shN.bands < 1 || meta.shN.bands > 3)
                 throw new Exception($"SOG shN.bands must be 1..3 in {filePath}");
@@ -99,7 +100,7 @@ internal static class PlayCanvasSogReader
             splat.dc0 = DecodeDc(meta, sh0Pixel);
             splat.opacity = sh0Pixel.a / 255f;
 
-            if (meta.shN != null)
+            if (hasHigherOrderSh)
                 splat.sh = DecodeHigherOrderSh(meta, shLabels, shCentroids, x, y, shCoeffCount);
         }
 
@@ -170,6 +171,18 @@ internal static class PlayCanvasSogReader
             throw new Exception($"SOG {label} must contain {expectedLength} entries.");
     }
 
+    static bool HasHigherOrderSh(SogMeta meta)
+    {
+        return meta.shN != null
+            && meta.shN.count > 0
+            && meta.shN.bands > 0
+            && meta.shN.codebook != null
+            && meta.shN.files != null
+            && meta.shN.files.Length >= 2
+            && !string.IsNullOrWhiteSpace(meta.shN.files[0])
+            && !string.IsNullOrWhiteSpace(meta.shN.files[1]);
+    }
+
     static float3 DecodePosition(SogMeta meta, Rgba32 meansL, Rgba32 meansU)
     {
         int qx = (meansU.r << 8) | meansL.r;
@@ -189,10 +202,11 @@ internal static class PlayCanvasSogReader
 
     static float3 DecodeScale(SogMeta meta, Rgba32 scalesPixel)
     {
-        return new float3(
+        float3 logScale = new float3(
             meta.scales.codebook[scalesPixel.r],
             meta.scales.codebook[scalesPixel.g],
             meta.scales.codebook[scalesPixel.b]);
+        return GaussianUtils.LinearScale(logScale);
     }
 
     static float4 DecodeQuaternion(Rgba32 quatPixel)
@@ -319,13 +333,13 @@ internal static class PlayCanvasSogReader
     }
 
     [Serializable]
-    sealed class FileSection
+    class FileSection
     {
         public string[] files;
     }
 
     [Serializable]
-    sealed class CodebookSection : FileSection
+    class CodebookSection : FileSection
     {
         public float[] codebook;
     }

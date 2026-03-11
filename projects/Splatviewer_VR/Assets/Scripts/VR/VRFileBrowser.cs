@@ -8,7 +8,7 @@ using UnityEngine.UI;
 using UnityEngine.XR;
 
 /// <summary>
-/// World-space VR file browser for browsing the file system and loading .ply/.spz splat files.
+/// World-space VR file browser for browsing the file system and loading .ply/.spz/.sog splat files.
 ///
 /// VR Controls:
 ///   Left Y (secondaryButton)  → toggle browser open/close
@@ -17,7 +17,7 @@ using UnityEngine.XR;
 ///   Right B (secondaryButton) → go to parent directory
 ///
 /// Desktop fallback:
-///   Tab        → toggle browser
+///   Esc / Tab  → toggle browser
 ///   Arrow keys → navigate list
 ///   Enter      → select
 ///   Backspace  → go to parent
@@ -122,12 +122,13 @@ public class VRFileBrowser : MonoBehaviour
         // Clear the one-frame guard from previous frame
         WasOpenThisFrame = IsOpen;
 
-        // Toggle: left Y button or Tab key
+        // Toggle: left Y button or Esc/Tab key on desktop
         bool yBtn = ReadButton(XRNode.LeftHand, CommonUsages.secondaryButton);
         if (yBtn && _toggleReady) { ToggleBrowser(); _toggleReady = false; }
         else if (!yBtn) _toggleReady = true;
 
-        if (!XRSettings.isDeviceActive && Input.GetKeyDown(KeyCode.Tab))
+        if (!XRSettings.isDeviceActive
+            && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Tab)))
             ToggleBrowser();
 
         if (!IsOpen) return;
@@ -147,6 +148,12 @@ public class VRFileBrowser : MonoBehaviour
         {
             PositionInFront();
             Navigate(_currentPath);
+        }
+
+        if (!XRSettings.isDeviceActive)
+        {
+            Cursor.lockState = IsOpen ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = IsOpen;
         }
     }
 
@@ -401,7 +408,7 @@ public class VRFileBrowser : MonoBehaviour
         // Hint bar at bottom
         y -= 4;
         string vr   = "[L/R Stick] Navigate    [L/R Trigger or A] Select    [B] Back    [Y] Close";
-        string desk  = "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Tab] Close";
+        string desk  = "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Esc/Tab] Close";
         _hintText = MakeText(bg.transform, "Hint", XRSettings.isDeviceActive ? vr : desk,
             FONT_HINT, COL_HINT, PAD, y, CW - PAD * 2, HINT_H, TextAnchor.MiddleCenter);
 
@@ -505,7 +512,7 @@ public class VRFileBrowser : MonoBehaviour
 
         string controls = XRSettings.isDeviceActive
             ? "[L/R Stick] Navigate    [L/R Trigger or A] Select    [B] Back    [Y] Close"
-            : "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Tab] Close";
+            : "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Esc/Tab] Close";
         _hintText.text = $"{countInfo}\n{controls}";
         UpdateHelpText();
     }
@@ -526,7 +533,7 @@ public class VRFileBrowser : MonoBehaviour
             + "Hold left grip + X: flip\n"
             + "Hold left grip + A: reset rotation"
             : "Browser\n"
-            + "Tab: open / close\n"
+                + "Esc / Tab: open / close\n"
             + "Arrows: browse list\n"
             + "Enter: open / load\n"
             + "Backspace: parent folder\n\n"
@@ -536,7 +543,7 @@ public class VRFileBrowser : MonoBehaviour
                 + "Space / C: up / down\n"
                 + "R / F: next / previous splat\n"
                 + "Q / E: rotate splat\n"
-                + "Esc: release mouse, Left Click: capture mouse\n"
+                + "Left Click: capture mouse\n"
                 + "Home: reset rotation\n"
                 + "End: flip upside down";
     }
