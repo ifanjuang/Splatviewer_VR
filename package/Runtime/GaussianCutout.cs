@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 using System.Linq;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 namespace GaussianSplatting.Runtime

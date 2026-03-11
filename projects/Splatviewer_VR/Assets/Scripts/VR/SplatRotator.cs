@@ -36,6 +36,7 @@ public class SplatRotator : MonoBehaviour
     Quaternion _originalRotation;
     bool _flipButtonUsed;
     bool _resetButtonUsed;
+    VRFileBrowser _browser;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ public class SplatRotator : MonoBehaviour
     {
         transform.localEulerAngles = startEuler;
         _originalRotation = transform.localRotation;
+        _browser = FindAnyObjectByType<VRFileBrowser>();
     }
 
     void Update()
@@ -57,6 +59,8 @@ public class SplatRotator : MonoBehaviour
 
     void VRRotate()
     {
+        if (_browser != null && _browser.IsOpen) return;
+
         // Require left grip held as a "modifier" to avoid clashing with locomotion
         float leftGrip = ReadAxis1D(XRNode.LeftHand, CommonUsages.grip);
         if (leftGrip < 0.5f)

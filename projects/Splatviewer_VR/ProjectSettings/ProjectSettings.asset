@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DefaultCompany
-  productName: UnityGaussianSplatting
+  productName: SplatViewer_VR
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -143,7 +143,9 @@ PlayerSettings:
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
   bundleVersion: 0.1
-  preloadedAssets: []
+  preloadedAssets:
+  - {fileID: 4171088622154431798, guid: dac38aca0a614084197d4aa43faa18c5, type: 2}
+  - {fileID: 4498240371610195113, guid: 56f40f0f3e0d1ee4d836fdb8daf867d6, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -165,7 +167,7 @@ PlayerSettings:
   androidMaxAspectRatio: 2.1
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Standalone: com.DefaultCompany.UnityGaussianSplatting
+    Standalone: com.DefaultCompany.SplatViewerVR
   buildNumber:
     Bratwurst: 0
     Standalone: 0
@@ -719,7 +721,7 @@ PlayerSettings:
   metroCertificateNotAfter: 0000000000000000
   metroApplicationDescription: UnityGPUTexCompression
   wsaImages: {}
-  metroTileShortName: UnityGaussianSplatting
+  metroTileShortName: SplatViewer_VR
   metroTileShowName: 0
   metroMediumTileShowName: 0
   metroLargeTileShowName: 0

@@ -12,8 +12,8 @@ using UnityEngine.XR;
 ///
 /// VR Controls:
 ///   Left Y (secondaryButton)  → toggle browser open/close
-///   Right stick up/down       → navigate list
-///   Right trigger             → select (enter folder / load file)
+///   Left or right stick up/down → navigate list
+///   Left or right trigger     → select (enter folder / load file)
 ///   Right B (secondaryButton) → go to parent directory
 ///
 /// Desktop fallback:
@@ -80,6 +80,7 @@ public class VRFileBrowser : MonoBehaviour
     GameObject _root;
     Text _pathText;
     Text _hintText;
+    Text _helpText;
     Text[] _rowTexts;
     Image[] _rowBgs;
     static Font _font;
@@ -155,10 +156,10 @@ public class VRFileBrowser : MonoBehaviour
     {
         if (_entries.Count == 0) return;
 
-        // Right stick Y (VR) or arrow keys (desktop)
+        // Left or right stick Y (VR) or arrow keys (desktop)
         float ry = 0f;
         if (XRSettings.isDeviceActive)
-            ry = ReadStickY(XRNode.RightHand);
+            ry = ReadNavigationY();
         else
         {
             if (Input.GetKey(KeyCode.UpArrow))   ry =  1f;
@@ -184,7 +185,9 @@ public class VRFileBrowser : MonoBehaviour
     {
         bool trig = false;
         if (XRSettings.isDeviceActive)
-            trig = ReadTrigger(XRNode.RightHand) || ReadButton(XRNode.RightHand, CommonUsages.primaryButton);
+            trig = ReadTrigger(XRNode.LeftHand)
+                || ReadTrigger(XRNode.RightHand)
+                || ReadButton(XRNode.RightHand, CommonUsages.primaryButton);
         else
             trig = Input.GetKeyDown(KeyCode.Return);
 
@@ -398,10 +401,21 @@ public class VRFileBrowser : MonoBehaviour
 
         // Hint bar at bottom
         y -= 4;
-        string vr   = "[R.Stick] Navigate    [A / Trigger] Select    [B] Back    [Y] Close";
+        string vr   = "[L/R Stick] Navigate    [L/R Trigger or A] Select    [B] Back    [Y] Close";
         string desk  = "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Tab] Close";
         _hintText = MakeText(bg.transform, "Hint", XRSettings.isDeviceActive ? vr : desk,
             FONT_HINT, COL_HINT, PAD, y, CW - PAD * 2, HINT_H, TextAnchor.MiddleCenter);
+
+        var helpPanel = MakeChild(_root.transform, "HelpPanel");
+        var helpBg = helpPanel.AddComponent<Image>();
+        helpBg.color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
+        SetRect(helpPanel, CW + 24, -PAD, 320, 260);
+
+        _helpText = MakeText(helpPanel.transform, "Help", "", FONT_HINT, Color.white,
+            16, -16, 288, 228, TextAnchor.UpperLeft);
+        _helpText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _helpText.verticalOverflow = VerticalWrapMode.Overflow;
+        UpdateHelpText();
     }
 
     // ── UI Helpers ────────────────────────────────────────────────────────────
@@ -491,9 +505,36 @@ public class VRFileBrowser : MonoBehaviour
             countInfo += $"   [{_sel + 1}/{_entries.Count}]";
 
         string controls = XRSettings.isDeviceActive
-            ? "[R.Stick] Navigate    [A / Trigger] Select    [B] Back    [Y] Close"
+            ? "[L/R Stick] Navigate    [L/R Trigger or A] Select    [B] Back    [Y] Close"
             : "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Tab] Close";
         _hintText.text = $"{countInfo}\n{controls}";
+        UpdateHelpText();
+    }
+
+    void UpdateHelpText()
+    {
+        if (_helpText == null) return;
+
+        _helpText.text = XRSettings.isDeviceActive
+            ? "Browser\n"
+            + "Y: open / close\n"
+            + "Left or right stick: browse list\n"
+            + "Left or right trigger: open / load\n"
+            + "A: open / load\n"
+            + "B: parent folder\n\n"
+            + "Scene\n"
+            + "Hold left grip + right stick: rotate splat\n"
+            + "Hold left grip + X: flip\n"
+            + "Hold left grip + A: reset rotation"
+            : "Browser\n"
+            + "Tab: open / close\n"
+            + "Arrows: browse list\n"
+            + "Enter: open / load\n"
+            + "Backspace: parent folder\n\n"
+            + "Scene\n"
+            + "Arrow keys: rotate\n"
+            + "R: reset rotation\n"
+            + "F: flip upside down";
     }
 
     void EnsureVisible()
@@ -535,6 +576,13 @@ public class VRFileBrowser : MonoBehaviour
         if (devs.Count > 0 && devs[0].TryGetFeatureValue(usage, out bool v))
             return v;
         return false;
+    }
+
+    static float ReadNavigationY()
+    {
+        float leftY = ReadStickY(XRNode.LeftHand);
+        float rightY = ReadStickY(XRNode.RightHand);
+        return Mathf.Abs(leftY) >= Mathf.Abs(rightY) ? leftY : rightY;
     }
 
     static float ReadStickY(XRNode node)

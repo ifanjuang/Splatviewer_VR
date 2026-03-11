@@ -21,7 +21,10 @@
 /projects/**/Assets/Models~/*
 /projects/**/Library/*
 /projects/**/Logs/*
+/projects/**/Release/*
 /projects/**/Temp/*
 /projects/**/UserSettings/*
 /projects/**/obj/*
 *.sln.DotSettings.user
+
+/releases/*

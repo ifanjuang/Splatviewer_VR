@@ -70,6 +70,8 @@ public class VRLocomotion : MonoBehaviour
 
     void VRMove()
     {
+        if (_browser != null && _browser.IsOpen) return;
+
         Vector2 leftStick = ReadStick(XRNode.LeftHand);
         if (leftStick.magnitude <= stickDeadzone)
             return;
