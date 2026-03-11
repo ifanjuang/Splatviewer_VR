@@ -277,8 +277,7 @@ public class VRFileBrowser : MonoBehaviour
                 foreach (var file in Directory.GetFiles(_currentPath)
                     .Where(f =>
                     {
-                        var ext = Path.GetExtension(f).ToLowerInvariant();
-                        return ext == ".ply" || ext == ".spz";
+                        return RuntimeSplatLoader.IsSupportedFileExtension(f);
                     })
                     .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
                 {
@@ -336,7 +335,7 @@ public class VRFileBrowser : MonoBehaviour
 
                     // Reset camera to initial viewpoint
                     var rig = FindAnyObjectByType<VRRig>();
-                    if (rig != null) rig.ResetToSpawnPoint();
+                    if (rig != null) rig.ResetToSpawnPoint(loader != null ? loader.targetRenderer : null);
 
                     ToggleBrowser(); // close after loading
                 }

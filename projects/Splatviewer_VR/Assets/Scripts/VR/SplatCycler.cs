@@ -119,8 +119,7 @@ public class SplatCycler : MonoBehaviour
         _files = Directory.GetFiles(splatFolder)
             .Where(f =>
             {
-                string ext = Path.GetExtension(f).ToLowerInvariant();
-                return ext == ".ply" || ext == ".spz";
+                return RuntimeSplatLoader.IsSupportedFileExtension(f);
             })
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -140,7 +139,7 @@ public class SplatCycler : MonoBehaviour
         {
             _currentIndex = index;
             _currentFile = Path.GetFileName(path);
-            if (_rig != null) _rig.ResetToSpawnPoint();
+            if (_rig != null) _rig.ResetToSpawnPoint(loader != null ? loader.targetRenderer : null);
         }
     }
 

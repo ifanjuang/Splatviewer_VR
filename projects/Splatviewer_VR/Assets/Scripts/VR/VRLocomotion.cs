@@ -55,6 +55,14 @@ public class VRLocomotion : MonoBehaviour
         _rig = GetComponent<VRRig>();
         _browser = FindAnyObjectByType<VRFileBrowser>();
 
+        if (XRSettings.isDeviceActive)
+            SyncDesktopPitchFromCamera();
+        else
+            ResetDesktopLook();
+    }
+
+    void SyncDesktopPitchFromCamera()
+    {
         Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
         if (cam != null)
         {
@@ -63,6 +71,20 @@ public class VRLocomotion : MonoBehaviour
                 pitch -= 360f;
             _mousePitch = pitch;
         }
+    }
+
+    public void ResetDesktopLook()
+    {
+        if (XRSettings.isDeviceActive)
+            return;
+
+        Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
+        if (cam != null)
+        {
+            cam.transform.localRotation = Quaternion.identity;
+        }
+
+        _mousePitch = 0f;
     }
 
     void Update()
@@ -144,17 +166,16 @@ public class VRLocomotion : MonoBehaviour
         float v = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
         float y = (Input.GetKey(KeyCode.Space) ? 1f : 0f) - (Input.GetKey(KeyCode.C) ? 1f : 0f);
 
-        Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
-        Vector3 forward = cam != null ? cam.transform.forward : transform.forward;
+        Vector3 forward = transform.forward;
         forward.y = 0f;
         if (forward.sqrMagnitude < 0.001f)
-            forward = transform.forward;
+            forward = Vector3.forward;
         forward.Normalize();
 
-        Vector3 right = cam != null ? cam.transform.right : transform.right;
+        Vector3 right = transform.right;
         right.y = 0f;
         if (right.sqrMagnitude < 0.001f)
-            right = transform.right;
+            right = Vector3.right;
         right.Normalize();
 
         Vector3 move = (right * h + forward * v + Vector3.up * y);
@@ -164,6 +185,7 @@ public class VRLocomotion : MonoBehaviour
         bool allowMouseLook = !lockCursorInDesktopMode || Cursor.lockState == CursorLockMode.Locked;
         if (allowMouseLook)
         {
+            Camera cam = _rig != null ? _rig.xrCamera : Camera.main;
             float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
             float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 

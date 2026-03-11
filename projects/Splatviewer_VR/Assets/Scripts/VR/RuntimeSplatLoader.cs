@@ -26,6 +26,12 @@ public class RuntimeSplatLoader : MonoBehaviour
             targetRenderer = GetComponent<GaussianSplatRenderer>();
     }
 
+    public static bool IsSupportedFileExtension(string filePath)
+    {
+        string ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext == ".ply" || ext == ".spz";
+    }
+
     /// <summary>Load a .ply or .spz file from disk and display it.</summary>
     public bool LoadFile(string filePath)
     {
@@ -35,16 +41,16 @@ public class RuntimeSplatLoader : MonoBehaviour
             return false;
         }
 
-        string ext = Path.GetExtension(filePath).ToLowerInvariant();
-        if (ext != ".ply" && ext != ".spz")
+        if (!IsSupportedFileExtension(filePath))
         {
-            Debug.LogError($"[RuntimeSplatLoader] Unsupported format: {ext}");
+            Debug.LogError($"[RuntimeSplatLoader] Unsupported format: {Path.GetExtension(filePath)}");
             return false;
         }
 
         try
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            string ext = Path.GetExtension(filePath).ToLowerInvariant();
             var splats = ext == ".spz" ? ReadSpz(filePath) : ReadPly(filePath);
             if (splats == null || splats.Length == 0)
                 return false;
@@ -100,6 +106,7 @@ public class RuntimeSplatLoader : MonoBehaviour
             return false;
         }
     }
+
 
     void OnDestroy()
     {

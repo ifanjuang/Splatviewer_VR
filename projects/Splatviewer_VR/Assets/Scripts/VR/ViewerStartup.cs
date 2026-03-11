@@ -78,11 +78,9 @@ public sealed class ViewerStartup : MonoBehaviour
 
     static bool IsSupportedLaunchFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            return false;
-
-        string ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext == ".ply" || ext == ".spz";
+        return !string.IsNullOrWhiteSpace(path)
+            && File.Exists(path)
+            && RuntimeSplatLoader.IsSupportedFileExtension(path);
     }
 
     static void TryAutoLoadLaunchFile(string filePath)
@@ -117,7 +115,7 @@ public sealed class ViewerStartup : MonoBehaviour
 
         var rig = FindAnyObjectByType<VRRig>();
         if (rig != null)
-            rig.ResetToSpawnPoint();
+            rig.ResetToSpawnPoint(loader.targetRenderer);
 
         Debug.Log($"[ViewerStartup] Auto-loaded launch file: {filePath}");
     }

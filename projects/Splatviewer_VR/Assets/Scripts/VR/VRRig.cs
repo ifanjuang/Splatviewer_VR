@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 using System.Collections.Generic;
+using GaussianSplatting.Runtime;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -91,7 +92,7 @@ public class VRRig : MonoBehaviour
     {
         // Default target is world origin — SHARP splats always place the scene so the
         // capture camera is at (0,0,0), matching splatapult's identity default view.
-        Vector3 targetPos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
+        Vector3 targetPos = GetSpawnEyePosition();
         float yaw = spawnPoint != null ? spawnPoint.eulerAngles.y : 0f;
 
         // Place the XROrigin floor so the camera eye ends up at targetPos.
@@ -100,9 +101,34 @@ public class VRRig : MonoBehaviour
     }
 
     /// <summary>Resets the rig to its spawn point position and heading.</summary>
-    public void ResetToSpawnPoint()
+    public void ResetToSpawnPoint(GaussianSplatRenderer renderer = null)
     {
         ApplySpawnPoint();
+        AlignToRenderer(renderer);
+
+        var locomotion = GetComponent<VRLocomotion>();
+        if (locomotion != null)
+            locomotion.ResetDesktopLook();
+    }
+
+    Vector3 GetSpawnEyePosition()
+    {
+        return spawnPoint != null ? spawnPoint.position : Vector3.zero;
+    }
+
+    void AlignToRenderer(GaussianSplatRenderer renderer)
+    {
+        if (renderer == null || renderer.m_Asset == null)
+            return;
+
+        Vector3 boundsCenterLocal = (renderer.m_Asset.boundsMin + renderer.m_Asset.boundsMax) * 0.5f;
+        Vector3 boundsCenterWorld = renderer.transform.TransformPoint(boundsCenterLocal);
+        Vector3 lookDirection = boundsCenterWorld - GetSpawnEyePosition();
+        lookDirection.y = 0f;
+        if (lookDirection.sqrMagnitude < 0.0001f)
+            return;
+
+        transform.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
     }
 
     void ApplyCameraOffset()
