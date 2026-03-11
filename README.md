@@ -1,2 +1,91 @@
 # Splatviewer_VR
-A lightweight convenient Unity based Viewer for Gaussian Splats in VR (OpenXR)
+
+`Splatviewer_VR` is a VR-focused fork of the Unity Gaussian Splatting viewer. The repository keeps the reusable Unity package, a VR sample project, and a packaged Windows build for release workflows.
+
+This fork is based on [aras-p/UnityGaussianSplatting](https://github.com/aras-p/UnityGaussianSplatting) and adds a standalone VR viewer with runtime loading for Gaussian splat files.
+
+## What This Fork Adds
+
+- A dedicated Unity project at `projects/Splatviewer_VR`.
+- Runtime loading for splat files instead of requiring prebuilt Unity assets.
+- VR locomotion and controller-driven navigation.
+- File cycling and browser support for browsing splat files in-headset.
+- A Windows release build under `projects/Splatviewer_VR/Release/1.0`.
+
+## Repository Layout
+
+- `package/`: reusable Unity Gaussian Splatting package.
+- `projects/Splatviewer_VR/`: Unity project for the VR viewer.
+- `docs/`: upstream documentation for package integration and splat editing.
+
+## Viewer Features
+
+- Runtime loading of `.ply` and `.spz` splat files.
+- OpenXR-based VR support.
+- Smooth locomotion and snap turn.
+- Controller buttons for moving between splat files.
+- Keyboard and mouse fallback when running without a headset.
+
+## Controls
+
+### VR
+
+- Left stick: move.
+- Right stick X: snap turn.
+- Right stick Y: move up and down.
+- Right controller `B` / `secondaryButton`: next splat.
+- Right controller `A` / `primaryButton`: previous splat.
+
+### Desktop fallback
+
+- `W A S D`: move.
+- `Q / E`: move down / up.
+- Hold right mouse button: look around.
+- `PageDown` or `N`: next splat.
+- `PageUp` or `P`: previous splat.
+
+## Unity Project
+
+Open `projects/Splatviewer_VR` in Unity. The project includes `Assets/GSTestScene.unity`, and `Assets/Editor/BuildSetup.cs` ensures that scene is present in the build settings.
+
+Recommended environment:
+
+- Unity 2022.3 LTS.
+- Windows.
+- D3D12-capable GPU.
+- OpenXR-compatible headset runtime.
+
+## Runtime Splat Loading
+
+This fork includes runtime loading changes for the Gaussian splat package and VR-side runtime scripts.
+
+Highlights:
+
+- `GaussianSplatAsset` supports runtime-provided byte buffers.
+- `GaussianSplatRenderer` uses those runtime buffers when present.
+- `RuntimeSplatLoader` reads binary little-endian PLY data at runtime.
+- Splats are reordered and uploaded in a GPU-friendly layout.
+
+The source tree does not include sample splat data. Add your own `.ply` or `.spz` files and point the viewer to the folder you want to browse.
+
+## Building A Release
+
+The packaged Windows player is built into `projects/Splatviewer_VR/Release/1.0`.
+
+For GitHub releases, use the zip package generated from that folder instead of committing the raw build output. The repository ignores `projects/**/Release/` so source control stays focused on source, project config, and documentation.
+
+## Release Files
+
+- Release notes: `RELEASE_NOTES.md`
+- Release package output: `releases/Splatviewer_VR_v1.0_Windows_x64.zip`
+
+## Upstream Credits
+
+This work builds on the original Unity Gaussian Splatting implementation and the original 3D Gaussian Splatting research.
+
+- Upstream package: [aras-p/UnityGaussianSplatting](https://github.com/aras-p/UnityGaussianSplatting)
+- Paper: [3D Gaussian Splatting for Real-Time Radiance Field Rendering](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/)
+
+## License
+
+The repository retains the upstream MIT-licensed Unity integration code. Review the original Gaussian Splatting training software license separately if your splat assets were produced with tooling that has additional restrictions.
