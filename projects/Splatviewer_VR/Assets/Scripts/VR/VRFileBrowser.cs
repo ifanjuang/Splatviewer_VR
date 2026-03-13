@@ -167,7 +167,7 @@ public class VRFileBrowser : MonoBehaviour
         if (_movieState == MovieState.Playing)
             HandleMovieFpsAdjust();
 
-        // Movie stop — M key or left grip + thumbstick click stops playback
+        // Movie stop — Left Y or M key stops playback
         if (_movieState == MovieState.Playing)
         {
             bool stopBtn = false;
@@ -186,10 +186,12 @@ public class VRFileBrowser : MonoBehaviour
                 _movieBtnReady = true;
         }
 
-        // Toggle: left Y button or Esc/Tab key on desktop
-        bool yBtn = ReadButton(XRNode.LeftHand, CommonUsages.secondaryButton);
-        if (yBtn && _toggleReady) { ToggleBrowser(); _toggleReady = false; }
-        else if (!yBtn) _toggleReady = true;
+        // Toggle: right stick click (VR) or Esc/Tab (desktop)
+        bool toggleBtn = false;
+        if (XRSettings.isDeviceActive)
+            toggleBtn = ReadStickClick(XRNode.RightHand);
+        if (toggleBtn && _toggleReady) { ToggleBrowser(); _toggleReady = false; }
+        else if (!toggleBtn) _toggleReady = true;
 
         if (!XRSettings.isDeviceActive
             && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Tab)))
@@ -332,11 +334,8 @@ public class VRFileBrowser : MonoBehaviour
         bool pressed = false;
         if (XRSettings.isDeviceActive)
         {
-            // Use right thumbstick press for movie mode
-            var devs = new List<InputDevice>();
-            InputDevices.GetDevicesAtXRNode(XRNode.RightHand, devs);
-            if (devs.Count > 0)
-                devs[0].TryGetFeatureValue(CommonUsages.primary2DAxisClick, out pressed);
+            // Use left Y button for movie mode start (while browser is open)
+            pressed = ReadButton(XRNode.LeftHand, CommonUsages.secondaryButton);
         }
         else
         {
@@ -778,12 +777,12 @@ public class VRFileBrowser : MonoBehaviour
 
         _helpText.text = XRSettings.isDeviceActive
             ? "Browser\n"
-            + "Y: open / close\n"
+            + "R-Stick click: open / close\n"
             + "Stick: browse list\n"
             + "Trigger / A: open / load\n"
             + "B: parent folder\n"
             + "X: toggle preload\n"
-            + "R-Stick click: start movie\n\n"
+            + "Y: start movie\n\n"
             + "Locomotion\n"
             + "R-Stick Y: forward / back\n"
             + "R-Stick X: snap turn\n"
@@ -854,6 +853,15 @@ public class VRFileBrowser : MonoBehaviour
         var devs = new List<InputDevice>();
         InputDevices.GetDevicesAtXRNode(node, devs);
         if (devs.Count > 0 && devs[0].TryGetFeatureValue(usage, out bool v))
+            return v;
+        return false;
+    }
+
+    static bool ReadStickClick(XRNode node)
+    {
+        var devs = new List<InputDevice>();
+        InputDevices.GetDevicesAtXRNode(node, devs);
+        if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool v))
             return v;
         return false;
     }
