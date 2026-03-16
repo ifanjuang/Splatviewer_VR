@@ -220,7 +220,10 @@ public class WorldGrabManipulator : MonoBehaviour
         {
             if (IsRotating)
             {
-                // Just released — start inertia
+                // Just released — scale velocity to match actual world speed,
+                // then start inertia from the world's real motion rate.
+                _angularVelocity *= rotationScale;
+                _linearVelocity *= rotationScale;
                 IsRotating = false;
                 _hasInertia = _angularVelocity.magnitude > inertiaMinSpeed;
             }
