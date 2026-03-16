@@ -52,8 +52,8 @@ public class SplatCycler : MonoBehaviour
 
     // Internal
     List<string> _files = new List<string>();
-    bool _btnNextReady = true;
-    bool _btnPrevReady = true;
+    bool _prevBtnNext;
+    bool _prevBtnPrev;
     VRFileBrowser _browser;
     VRRig _rig;
     WorldGrabManipulator _worldGrab;
@@ -339,39 +339,29 @@ public class SplatCycler : MonoBehaviour
         // Don't consume A/B when file browser is open (or just closed this frame)
         if (_browser != null && (_browser.IsOpen || _browser.WasOpenThisFrame)) return;
 
-        var devices = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(XRNode.RightHand, devices);
+        bool bPressed = ReadButtonAny(XRNode.RightHand, CommonUsages.secondaryButton); // B
+        bool aPressed = ReadButtonAny(XRNode.RightHand, CommonUsages.primaryButton);   // A
 
-        bool bPressed = false;
-        bool aPressed = false;
-
-        if (devices.Count > 0)
-        {
-            devices[0].TryGetFeatureValue(CommonUsages.secondaryButton, out bPressed); // B
-            devices[0].TryGetFeatureValue(CommonUsages.primaryButton, out aPressed);   // A
-        }
-
-        // B → next (with debounce)
-        if (bPressed && _btnNextReady)
-        {
+        // B → next (edge-triggered: fire only on press, not hold)
+        if (bPressed && !_prevBtnNext)
             LoadNext();
-            _btnNextReady = false;
-        }
-        else if (!bPressed)
-        {
-            _btnNextReady = true;
-        }
+        _prevBtnNext = bPressed;
 
-        // A → previous (with debounce)
-        if (aPressed && _btnPrevReady)
-        {
+        // A → previous (edge-triggered)
+        if (aPressed && !_prevBtnPrev)
             LoadPrevious();
-            _btnPrevReady = false;
-        }
-        else if (!aPressed)
-        {
-            _btnPrevReady = true;
-        }
+        _prevBtnPrev = aPressed;
+    }
+
+    /// <summary>Reads a bool button from ALL devices at the given XR node to avoid device-order flicker.</summary>
+    static bool ReadButtonAny(XRNode node, InputFeatureUsage<bool> usage)
+    {
+        var devices = new List<InputDevice>();
+        InputDevices.GetDevicesAtXRNode(node, devices);
+        foreach (var dev in devices)
+            if (dev.TryGetFeatureValue(usage, out bool v) && v)
+                return true;
+        return false;
     }
 
     void HandleKeyboardInput()

@@ -29,7 +29,7 @@ public class WorldGrabManipulator : MonoBehaviour
 
     [Header("Smoothing")]
     [Tooltip("Rotation smoothing speed. Higher = snappier. 0 = instant (no smoothing).")]
-    [Range(0f, 50f)] public float rotationSmoothing = 0f;
+    [Range(0f, 50f)] public float rotationSmoothing = 10f;
 
     // ── State flags ──────────────────────────────────────────────────────────
 
@@ -104,8 +104,7 @@ public class WorldGrabManipulator : MonoBehaviour
 
             // Delta between current hand position and start, applied to world
             Vector3 handDelta = handPos - _grabHandStartPos;
-            // Invert X and Z so the world moves "with" the hand (grab metaphor)
-            worldRoot.position = _grabWorldStartPos + new Vector3(-handDelta.x, handDelta.y, -handDelta.z);
+            worldRoot.position = _grabWorldStartPos + handDelta;
         }
         else
         {
@@ -131,9 +130,13 @@ public class WorldGrabManipulator : MonoBehaviour
             // Delta rotation of the hand since start
             Quaternion deltaRot = handRot * Quaternion.Inverse(_rotateHandStartRot);
 
-            // Compute target rotation and position around the hand's initial pivot point
+            // Hand position delta (translation while rotating)
+            Vector3 handPosDelta = handPos - _rotatePivotStart;
+
+            // Compute target rotation and position around the hand's initial pivot point,
+            // plus controller translation so the world follows hand movement
             _targetRotation = deltaRot * _rotateWorldStartRot;
-            _targetPosition = _rotatePivotStart + deltaRot * (_rotateWorldStartPos - _rotatePivotStart);
+            _targetPosition = _rotatePivotStart + deltaRot * (_rotateWorldStartPos - _rotatePivotStart) + handPosDelta;
 
             if (rotationSmoothing <= 0f)
             {

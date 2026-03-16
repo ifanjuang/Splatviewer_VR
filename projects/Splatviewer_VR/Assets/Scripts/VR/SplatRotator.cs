@@ -16,6 +16,7 @@ using UnityEngine;
 ///   Home                 → reset to original rotation
 ///   End                  → flip upside down
 /// </summary>
+[DefaultExecutionOrder(-200)]
 public class SplatRotator : MonoBehaviour
 {
     [Header("Rotation Speed")]
