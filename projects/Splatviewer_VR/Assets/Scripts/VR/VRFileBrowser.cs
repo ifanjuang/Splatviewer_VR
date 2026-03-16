@@ -86,6 +86,8 @@ public class VRFileBrowser : MonoBehaviour
     Text _helpText;
     Text[] _rowTexts;
     Image[] _rowBgs;
+    RawImage _thumbnailImage;
+    Texture2D _thumbnailTex;
     static Font _font;
 
     // ── Input state ───────────────────────────────────────────────────────────
@@ -537,35 +539,69 @@ public class VRFileBrowser : MonoBehaviour
                 if (_movieState != MovieState.Idle)
                     StopMovieMode();
 
+                // Pre-flight RAM check
+                long estimatedBytes = RuntimeSplatLoader.EstimateAssetBytes(entry.path);
+                long availableBytes = (long)SystemInfo.systemMemorySize * 1024L * 1024L * 80L / 100L;
+                if (estimatedBytes > availableBytes)
+                {
+                    long estMB = estimatedBytes / (1024 * 1024);
+                    long availMB = availableBytes / (1024 * 1024);
+                    Debug.LogWarning($"[VRFileBrowser] File may exceed available RAM: ~{estMB}MB needed, ~{availMB}MB available");
+                    _pathText.text = $"WARNING: ~{estMB}MB needed, only ~{availMB}MB available!";
+                    _pathText.color = new Color(1f, 0.7f, 0.2f);
+                    // Still attempt the load — the warning is informational
+                }
+
                 // Reset world to neutral before loading new scene
                 if (worldGrab != null)
                     worldGrab.ResetWorld();
 
-                bool ok = loader.LoadFile(entry.path);
-                if (ok)
+                try
                 {
-                    // Sync SplatCycler to the loaded file so B/A cycling continues from here
-                    if (cycler != null && !string.IsNullOrEmpty(_currentPath))
+                    bool ok = loader.LoadFile(entry.path);
+                    if (ok)
                     {
-                        cycler.splatFolder = _currentPath;
-                        cycler.ScanFolder();
-                        // Find the loaded file's index in the cycler's list
-                        string fileName = Path.GetFileName(entry.path);
-                        for (int i = 0; i < cycler.Files.Count; i++)
+                        // Sync SplatCycler to the loaded file so B/A cycling continues from here
+                        if (cycler != null && !string.IsNullOrEmpty(_currentPath))
                         {
-                            if (Path.GetFileName(cycler.Files[i]).Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                            cycler.splatFolder = _currentPath;
+                            cycler.ScanFolder();
+                            // Find the loaded file's index in the cycler's list
+                            string fileName = Path.GetFileName(entry.path);
+                            for (int i = 0; i < cycler.Files.Count; i++)
                             {
-                                cycler.SetIndex(i);
-                                break;
+                                if (Path.GetFileName(cycler.Files[i]).Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    cycler.SetIndex(i);
+                                    break;
+                                }
                             }
                         }
+
+                        // Reset camera to initial viewpoint
+                        var rig = FindAnyObjectByType<VRRig>();
+                        if (rig != null) rig.ResetToSpawnPoint(loader != null ? loader.targetRenderer : null);
+
+                        ToggleBrowser(); // close after loading
                     }
-
-                    // Reset camera to initial viewpoint
-                    var rig = FindAnyObjectByType<VRRig>();
-                    if (rig != null) rig.ResetToSpawnPoint(loader != null ? loader.targetRenderer : null);
-
-                    ToggleBrowser(); // close after loading
+                    else
+                    {
+                        _pathText.text = $"Failed to load: {entry.name}";
+                        _pathText.color = new Color(1f, 0.3f, 0.3f);
+                    }
+                }
+                catch (OutOfMemoryException)
+                {
+                    Debug.LogError($"[VRFileBrowser] Out of memory loading {entry.name}");
+                    _pathText.text = $"OUT OF MEMORY — file too large: {entry.name}";
+                    _pathText.color = new Color(1f, 0.3f, 0.3f);
+                    System.GC.Collect();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[VRFileBrowser] Error loading {entry.name}: {ex.Message}");
+                    _pathText.text = $"Error: {ex.Message}";
+                    _pathText.color = new Color(1f, 0.3f, 0.3f);
                 }
             }
         }
@@ -643,6 +679,18 @@ public class VRFileBrowser : MonoBehaviour
         _helpText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _helpText.verticalOverflow = VerticalWrapMode.Overflow;
         UpdateHelpText();
+
+        // Thumbnail panel (below help panel)
+        var thumbPanel = MakeChild(_root.transform, "ThumbPanel");
+        var thumbBg = thumbPanel.AddComponent<Image>();
+        thumbBg.color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
+        SetRect(thumbPanel, CW + 24, -PAD - 390, 340, 260);
+
+        var thumbGo = MakeChild(thumbPanel.transform, "Thumb");
+        _thumbnailImage = thumbGo.AddComponent<RawImage>();
+        _thumbnailImage.color = Color.white;
+        SetRect(thumbGo, 10, -10, 320, 240);
+        _thumbnailImage.enabled = false;
     }
 
     // ── UI Helpers ────────────────────────────────────────────────────────────
@@ -697,6 +745,7 @@ public class VRFileBrowser : MonoBehaviour
         _pathText.text = string.IsNullOrEmpty(_currentPath)
             ? "Computer (Drives)"
             : TruncatePath(_currentPath, 70);
+        _pathText.color = COL_PATH; // reset color after error
     }
 
     void UpdateRows()
@@ -746,6 +795,7 @@ public class VRFileBrowser : MonoBehaviour
 
         _hintText.text = $"{countInfo}\n{controls}{movieInfo}";
         UpdateHelpText();
+        UpdateThumbnail();
     }
 
     void UpdateHelpText()
@@ -814,6 +864,60 @@ public class VRFileBrowser : MonoBehaviour
             + "Home: reset    End: flip\n\n"
             + preloadStatus + "\n"
             + movieStatus;
+    }
+
+    void UpdateThumbnail()
+    {
+        if (_thumbnailImage == null) return;
+
+        if (_sel < 0 || _sel >= _entries.Count || _entries[_sel].isDir)
+        {
+            _thumbnailImage.enabled = false;
+            return;
+        }
+
+        string splatPath = _entries[_sel].path;
+        string baseName = Path.GetFileNameWithoutExtension(splatPath);
+        string dir = Path.GetDirectoryName(splatPath);
+
+        // Look for matching image: .jpg, .jpeg, .png
+        string imgPath = null;
+        string[] exts = { ".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG" };
+        foreach (string ext in exts)
+        {
+            string candidate = Path.Combine(dir, baseName + ext);
+            if (File.Exists(candidate))
+            {
+                imgPath = candidate;
+                break;
+            }
+        }
+
+        if (imgPath == null)
+        {
+            _thumbnailImage.enabled = false;
+            return;
+        }
+
+        try
+        {
+            byte[] data = File.ReadAllBytes(imgPath);
+            if (_thumbnailTex == null)
+                _thumbnailTex = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            if (_thumbnailTex.LoadImage(data))
+            {
+                _thumbnailImage.texture = _thumbnailTex;
+                _thumbnailImage.enabled = true;
+            }
+            else
+            {
+                _thumbnailImage.enabled = false;
+            }
+        }
+        catch
+        {
+            _thumbnailImage.enabled = false;
+        }
     }
 
     void EnsureVisible()
