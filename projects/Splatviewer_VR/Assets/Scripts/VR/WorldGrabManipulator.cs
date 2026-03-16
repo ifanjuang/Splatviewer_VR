@@ -32,6 +32,9 @@ public class WorldGrabManipulator : MonoBehaviour
     [Range(0f, 1f)] public float triggerThreshold = 0.5f;
 
     [Header("Smoothing")]
+    [Tooltip("Scales hand rotation before applying. Lower = slower/heavier feel.")]
+    [Range(0.05f, 1f)] public float rotationScale = 0.35f;
+
     [Tooltip("Hand input filter strength. Higher = smoother but more latent. 0 = no filtering.")]
     [Range(0f, 50f)] public float inputSmoothing = 15f;
 
@@ -174,8 +177,9 @@ public class WorldGrabManipulator : MonoBehaviour
                 _filteredHandPos = handPos;
             }
 
-            // Delta rotation of the filtered hand since start
-            Quaternion deltaRot = _filteredHandRot * Quaternion.Inverse(_rotateHandStartRot);
+            // Delta rotation of the filtered hand since start, scaled down for heavier feel
+            Quaternion fullDelta = _filteredHandRot * Quaternion.Inverse(_rotateHandStartRot);
+            Quaternion deltaRot = Quaternion.Slerp(Quaternion.identity, fullDelta, rotationScale);
 
             // Filtered hand position delta
             Vector3 handPosDelta = _filteredHandPos - _rotatePivotStart;
