@@ -38,6 +38,8 @@ public sealed class ViewerStartup : MonoBehaviour
 
         if (!string.IsNullOrEmpty(_pendingFilePath))
             TryAutoLoadLaunchFile(_pendingFilePath);
+        else
+            OpenBrowserOnDirectLaunch();
 
         InitializeDesktopCursorState();
     }
@@ -64,6 +66,10 @@ public sealed class ViewerStartup : MonoBehaviour
     {
         if (!UnityEngine.XR.XRSettings.isDeviceActive)
         {
+            var browser = FindAnyObjectByType<VRFileBrowser>();
+            if (browser != null && browser.IsOpen)
+                return;
+
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -130,10 +136,21 @@ public sealed class ViewerStartup : MonoBehaviour
             }
         }
 
+        var browser = FindAnyObjectByType<VRFileBrowser>();
+        if (browser != null && !string.IsNullOrEmpty(folder))
+            browser.SetCurrentFolder(folder);
+
         var rig = FindAnyObjectByType<VRRig>();
         if (rig != null)
             rig.ResetToSpawnPoint(loader.targetRenderer);
 
         Debug.Log($"[ViewerStartup] Auto-loaded launch file: {filePath}");
+    }
+
+    static void OpenBrowserOnDirectLaunch()
+    {
+        var browser = FindAnyObjectByType<VRFileBrowser>();
+        if (browser != null && !browser.IsOpen)
+            browser.ToggleBrowser();
     }
 }
