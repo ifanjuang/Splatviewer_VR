@@ -20,13 +20,15 @@ using UnityEngine.XR;
 ///   Right B (secondaryButton) → go to parent directory
 ///
 /// Desktop fallback:
-///   Esc / Tab  → toggle browser
-///   Arrow keys → navigate list
-///   Enter      → select
-///   Backspace  → go to parent
+///   Esc / Tab     → toggle browser
+///   WASD / Arrows → navigate list
+///   Enter         → select
+///   Backspace     → go to parent
 /// </summary>
 public class VRFileBrowser : MonoBehaviour
 {
+    const string FavoritesPrefsKey = "Splatviewer.VRFileBrowser.Favorites";
+
     [Header("Setup")]
     [Tooltip("RuntimeSplatLoader to load selected files into.")]
     public RuntimeSplatLoader loader;
@@ -59,6 +61,8 @@ public class VRFileBrowser : MonoBehaviour
     const int PATH_H = 36;
     const int HINT_H = 30;
     const int PAD = 10;
+    const int FAVORITES_W = 250;
+    const int LIST_GAP = 12;
     const int FONT_ENTRY = 22;
     const int FONT_PATH = 18;
     const int FONT_HINT = 16;
@@ -71,9 +75,13 @@ public class VRFileBrowser : MonoBehaviour
 
     // ── Colors ────────────────────────────────────────────────────────────────
 
-    static readonly Color COL_BG      = new Color(0.08f, 0.08f, 0.10f, 0.96f);
-    static readonly Color COL_SEL     = new Color(0.20f, 0.40f, 0.85f, 0.80f);
+    static readonly Color COL_BG      = new Color(0.08f, 0.08f, 0.10f, 1.00f);
+    static readonly Color COL_SEL     = new Color(0.20f, 0.40f, 0.85f, 1.00f);
     static readonly Color COL_ROW_ALT = new Color(1f, 1f, 1f, 0.03f);
+    static readonly Color COL_CURRENT = new Color(0.55f, 1.00f, 0.75f);
+    static readonly Color COL_CURRENT_BG = new Color(0.18f, 0.42f, 0.24f, 0.55f);
+    static readonly Color COL_FAVORITE = new Color(0.95f, 0.82f, 0.42f);
+    static readonly Color COL_FAVORITE_BG = new Color(0.42f, 0.32f, 0.12f, 0.45f);
     static readonly Color COL_DIR     = new Color(1f, 0.88f, 0.40f);
     static readonly Color COL_ANIM    = new Color(0.40f, 0.90f, 0.50f);
     static readonly Color COL_FILE    = Color.white;
@@ -86,16 +94,25 @@ public class VRFileBrowser : MonoBehaviour
 
     string _currentPath;
     readonly List<Entry> _entries = new List<Entry>();
+    readonly List<string> _favoriteFolders = new List<string>();
     int _sel;
     int _scroll;
+    int _favoriteSel;
+    int _favoriteScroll;
+
+    enum BrowserPane { Favorites, Files }
+    BrowserPane _activePane = BrowserPane.Files;
 
     // ── UI objects ────────────────────────────────────────────────────────────
 
     GameObject _root;
     Text _pathText;
+    Text _fpsText;
     Text _hintText;
     Text _helpText;
+    Text[] _favoriteTexts;
     Text[] _rowTexts;
+    Image[] _favoriteBgs;
     Image[] _rowBgs;
     // Preview panel (right side)
     GameObject _previewPanel;
@@ -114,6 +131,7 @@ public class VRFileBrowser : MonoBehaviour
     bool _backReady = true;
     bool _preloadToggleReady = true;
     bool _movieBtnReady = true;
+    bool _favoriteToggleReady = true;
     float _fpsAdjustCD;
 
     // Movie mode
@@ -121,6 +139,7 @@ public class VRFileBrowser : MonoBehaviour
     MovieState _movieState = MovieState.Idle;
     int _movieLoadedCount;
     int _movieTotalCount;
+    float _smoothedFps;
 
     struct Entry
     {
@@ -140,6 +159,7 @@ public class VRFileBrowser : MonoBehaviour
         if (worldGrab == null) worldGrab = FindAnyObjectByType<WorldGrabManipulator>();
 
         _currentPath = string.IsNullOrEmpty(startPath) ? null : startPath;
+        LoadFavorites();
 
         // Cache a font reference
         _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -154,6 +174,8 @@ public class VRFileBrowser : MonoBehaviour
     {
         // Clear the one-frame guard from previous frame
         WasOpenThisFrame = IsOpen;
+
+        UpdateFpsDisplay();
 
         // Movie loading pump — runs even when browser is closed
         if (_movieState == MovieState.Loading)
@@ -222,6 +244,7 @@ public class VRFileBrowser : MonoBehaviour
         HandleNavigation();
         HandleSelect();
         HandleBack();
+        HandleFavoriteToggle();
         HandlePreloadToggle();
         HandleMovieButton();
     }
@@ -249,32 +272,64 @@ public class VRFileBrowser : MonoBehaviour
         }
     }
 
+    public void SetCurrentFolder(string path)
+    {
+        _currentPath = string.IsNullOrWhiteSpace(path) ? null : path;
+        startPath = _currentPath ?? string.Empty;
+
+        if (IsOpen)
+            Navigate(_currentPath);
+    }
+
     // ── Input Handling ────────────────────────────────────────────────────────
 
     void HandleNavigation()
     {
-        if (_entries.Count == 0) return;
-
-        // Left or right stick Y (VR) or arrow keys (desktop)
+        // Left/right switches between favorites and file list.
         float ry = 0f;
+        float rx = 0f;
         if (XRSettings.isDeviceActive)
+        {
             ry = ReadNavigationY();
+            rx = ReadNavigationX();
+        }
         else
         {
-            if (Input.GetKey(KeyCode.UpArrow))   ry =  1f;
-            if (Input.GetKey(KeyCode.DownArrow)) ry = -1f;
+            if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W))   ry =  1f;
+            if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) ry = -1f;
+            if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) rx = -1f;
+            if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) rx = 1f;
         }
 
         _stickCD -= Time.deltaTime;
-        if (Mathf.Abs(ry) > 0.5f && _stickCD <= 0f)
+        if (Mathf.Abs(rx) > 0.5f && Mathf.Abs(rx) >= Mathf.Abs(ry) && _stickCD <= 0f)
         {
-            _sel += (ry < 0f) ? 1 : -1;
-            _sel = Mathf.Clamp(_sel, 0, _entries.Count - 1);
-            EnsureVisible();
+            _activePane = rx < 0f ? BrowserPane.Favorites : BrowserPane.Files;
             UpdateRows();
             _stickCD = 0.18f;
         }
-        else if (Mathf.Abs(ry) <= 0.3f)
+        else if (Mathf.Abs(ry) > 0.5f && _stickCD <= 0f)
+        {
+            if (_activePane == BrowserPane.Favorites)
+            {
+                if (_favoriteFolders.Count > 0)
+                {
+                    _favoriteSel += ry < 0f ? 1 : -1;
+                    _favoriteSel = Mathf.Clamp(_favoriteSel, 0, _favoriteFolders.Count - 1);
+                    EnsureFavoriteVisible();
+                }
+            }
+            else if (_entries.Count > 0)
+            {
+                _sel += ry < 0f ? 1 : -1;
+                _sel = Mathf.Clamp(_sel, 0, _entries.Count - 1);
+                EnsureVisible();
+            }
+
+            UpdateRows();
+            _stickCD = 0.18f;
+        }
+        else if (Mathf.Abs(ry) <= 0.3f && Mathf.Abs(rx) <= 0.3f)
         {
             _stickCD = 0f;
         }
@@ -293,7 +348,10 @@ public class VRFileBrowser : MonoBehaviour
         if (trig && _trigReady)
         {
             _trigReady = false;
-            SelectCurrent();
+            if (_activePane == BrowserPane.Favorites)
+                SelectFavorite();
+            else
+                SelectCurrent();
         }
         else if (!trig)
         {
@@ -312,11 +370,48 @@ public class VRFileBrowser : MonoBehaviour
         if (b && _backReady)
         {
             _backReady = false;
-            GoUp();
+            if (_activePane == BrowserPane.Favorites)
+            {
+                _activePane = BrowserPane.Files;
+                UpdateRows();
+            }
+            else
+            {
+                GoUp();
+            }
         }
         else if (!b)
         {
             _backReady = true;
+        }
+    }
+
+    void HandleFavoriteToggle()
+    {
+        bool pressed = false;
+        if (XRSettings.isDeviceActive)
+        {
+            var devs = new List<InputDevice>();
+            InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, devs);
+            if (devs.Count > 0)
+                devs[0].TryGetFeatureValue(CommonUsages.primary2DAxisClick, out pressed);
+        }
+        else
+        {
+            pressed = Input.GetKeyDown(KeyCode.F);
+        }
+
+        if (pressed && _favoriteToggleReady)
+        {
+            _favoriteToggleReady = false;
+            if (_activePane == BrowserPane.Favorites)
+                RemoveSelectedFavorite();
+            else
+                AddCurrentFolderToFavorites();
+        }
+        else if (!pressed)
+        {
+            _favoriteToggleReady = true;
         }
     }
 
@@ -504,6 +599,56 @@ public class VRFileBrowser : MonoBehaviour
             cycler.StopMovie();
         _movieState = MovieState.Idle;
         UpdateHelpText();
+    }
+
+    void LoadFavorites()
+    {
+        _favoriteFolders.Clear();
+
+        string raw = PlayerPrefs.GetString(FavoritesPrefsKey, string.Empty);
+        if (string.IsNullOrWhiteSpace(raw))
+            return;
+
+        foreach (string folder in raw.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string trimmed = folder.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed) && Directory.Exists(trimmed) && !_favoriteFolders.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+                _favoriteFolders.Add(trimmed);
+        }
+    }
+
+    void SaveFavorites()
+    {
+        PlayerPrefs.SetString(FavoritesPrefsKey, string.Join("\n", _favoriteFolders));
+        PlayerPrefs.Save();
+    }
+
+    void AddCurrentFolderToFavorites()
+    {
+        if (string.IsNullOrWhiteSpace(_currentPath) || !Directory.Exists(_currentPath))
+            return;
+
+        if (_favoriteFolders.Contains(_currentPath, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        _favoriteFolders.Add(_currentPath);
+        _favoriteFolders.Sort(StringComparer.OrdinalIgnoreCase);
+        _favoriteSel = Mathf.Clamp(_favoriteFolders.FindIndex(folder => string.Equals(folder, _currentPath, StringComparison.OrdinalIgnoreCase)), 0, Mathf.Max(0, _favoriteFolders.Count - 1));
+        EnsureFavoriteVisible();
+        SaveFavorites();
+        UpdateRows();
+    }
+
+    void RemoveSelectedFavorite()
+    {
+        if (_favoriteSel < 0 || _favoriteSel >= _favoriteFolders.Count)
+            return;
+
+        _favoriteFolders.RemoveAt(_favoriteSel);
+        _favoriteSel = Mathf.Clamp(_favoriteSel, 0, Mathf.Max(0, _favoriteFolders.Count - 1));
+        EnsureFavoriteVisible();
+        SaveFavorites();
+        UpdateRows();
     }
 
     // ── File System ───────────────────────────────────────────────────────────
@@ -703,6 +848,22 @@ public class VRFileBrowser : MonoBehaviour
         }
     }
 
+    void SelectFavorite()
+    {
+        if (_favoriteSel < 0 || _favoriteSel >= _favoriteFolders.Count)
+            return;
+
+        string favoritePath = _favoriteFolders[_favoriteSel];
+        if (!Directory.Exists(favoritePath))
+        {
+            RemoveSelectedFavorite();
+            return;
+        }
+
+        _activePane = BrowserPane.Files;
+        Navigate(favoritePath);
+    }
+
     void GoUp()
     {
         if (string.IsNullOrEmpty(_currentPath)) return; // already at drives
@@ -734,7 +895,9 @@ public class VRFileBrowser : MonoBehaviour
 
         // Path bar (full width)
         _pathText = MakeText(bg.transform, "Path", "", FONT_PATH, COL_PATH,
-            PAD + 4, y, CW - PAD * 2 - 8, PATH_H);
+            PAD + 4, y, CW - 160f, PATH_H);
+        _fpsText = MakeText(bg.transform, "FPS", "", FONT_PATH, COL_CURRENT,
+            CW - 140, y, 120, PATH_H, TextAnchor.MiddleRight);
         y -= PATH_H;
 
         // Horizontal separator under path
@@ -744,8 +907,34 @@ public class VRFileBrowser : MonoBehaviour
         y -= 4;
 
         float contentY = y; // remember where content starts
+        float filesX = PAD + FAVORITES_W + LIST_GAP;
+        float filesW = NAV_W - FAVORITES_W - LIST_GAP;
 
-        // ── Left side: navigation rows ──
+        // Favorites / files divider
+        var divider = MakeChild(bg.transform, "PaneDivider");
+        divider.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
+        SetRect(divider, PAD + FAVORITES_W + (LIST_GAP * 0.5f), contentY, 1, ROWS * ROW_H);
+
+        // ── Favorites column (left) ──
+        _favoriteBgs = new Image[ROWS];
+        _favoriteTexts = new Text[ROWS];
+        float favY = contentY;
+        for (int i = 0; i < ROWS; i++)
+        {
+            var favBg = MakeChild(bg.transform, $"FavoriteBg{i}");
+            _favoriteBgs[i] = favBg.AddComponent<Image>();
+            _favoriteBgs[i].color = COL_CLEAR;
+            SetRect(favBg, PAD, favY, FAVORITES_W, ROW_H);
+
+            _favoriteTexts[i] = MakeText(bg.transform, $"Favorite{i}", "", FONT_ENTRY, COL_FAVORITE,
+                PAD + 10, favY, FAVORITES_W - 20, ROW_H);
+            _favoriteTexts[i].resizeTextForBestFit = true;
+            _favoriteTexts[i].resizeTextMinSize = 12;
+            _favoriteTexts[i].resizeTextMaxSize = FONT_ENTRY;
+            favY -= ROW_H;
+        }
+
+        // ── File list column (middle) ──
         _rowBgs  = new Image[ROWS];
         _rowTexts = new Text[ROWS];
         float rowY = contentY;
@@ -754,14 +943,14 @@ public class VRFileBrowser : MonoBehaviour
             var rowBg = MakeChild(bg.transform, $"RowBg{i}");
             _rowBgs[i] = rowBg.AddComponent<Image>();
             _rowBgs[i].color = COL_CLEAR;
-            SetRect(rowBg, PAD, rowY, NAV_W - PAD, ROW_H);
+            SetRect(rowBg, filesX, rowY, filesW, ROW_H);
 
             _rowTexts[i] = MakeText(bg.transform, $"Row{i}", "", FONT_ENTRY, COL_FILE,
-                PAD + 8, rowY, NAV_W - PAD - 16, ROW_H);
+                filesX + 8, rowY, filesW - 16, ROW_H);
             rowY -= ROW_H;
         }
 
-        // Vertical separator between nav and preview
+        // Vertical separator between file list and preview
         float sepHeight = ROWS * ROW_H;
         var vSep = MakeChild(bg.transform, "VSep");
         vSep.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.10f);
@@ -805,11 +994,11 @@ public class VRFileBrowser : MonoBehaviour
         // Help panel (to the right of the main panel)
         var helpPanel = MakeChild(_root.transform, "HelpPanel");
         var helpBg = helpPanel.AddComponent<Image>();
-        helpBg.color = new Color(0.05f, 0.05f, 0.07f, 0.92f);
-        SetRect(helpPanel, CW + 24, -PAD, 340, 380);
+        helpBg.color = new Color(0.05f, 0.05f, 0.07f, 1f);
+        SetRect(helpPanel, CW + 24, -PAD, 420, 520);
 
         _helpText = MakeText(helpPanel.transform, "Help", "", FONT_HINT, Color.white,
-            16, -16, 308, 348, TextAnchor.UpperLeft);
+            16, -16, 388, 488, TextAnchor.UpperLeft);
         _helpText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _helpText.verticalOverflow = VerticalWrapMode.Overflow;
         UpdateHelpText();
@@ -870,14 +1059,88 @@ public class VRFileBrowser : MonoBehaviour
         _pathText.color = COL_PATH; // reset color after error
     }
 
+    void UpdateFpsDisplay()
+    {
+        if (_fpsText == null)
+            return;
+
+        float currentFps = Time.unscaledDeltaTime > 0f ? 1f / Time.unscaledDeltaTime : 0f;
+        if (_smoothedFps <= 0f)
+            _smoothedFps = currentFps;
+        else
+            _smoothedFps = Mathf.Lerp(_smoothedFps, currentFps, 0.1f);
+
+        _fpsText.text = $"FPS {_smoothedFps:F0}";
+    }
+
+    bool IsCurrentSplatEntry(Entry entry)
+    {
+        return !entry.isDir
+            && cycler != null
+            && !string.IsNullOrEmpty(cycler.CurrentFileName)
+            && string.Equals(entry.name, cycler.CurrentFileName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    bool IsCurrentFavorite(string path)
+    {
+        return !string.IsNullOrWhiteSpace(path)
+            && !string.IsNullOrWhiteSpace(_currentPath)
+            && string.Equals(path, _currentPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static string FormatFavoriteLabel(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+
+        string folderName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrEmpty(folderName))
+            folderName = path;
+
+        return folderName;
+    }
+
     void UpdateRows()
     {
+        for (int i = 0; i < ROWS; i++)
+        {
+            int idx = _favoriteScroll + i;
+            if (idx < _favoriteFolders.Count)
+            {
+                string favoritePath = _favoriteFolders[idx];
+                bool isCurrentFavorite = IsCurrentFavorite(favoritePath);
+                _favoriteTexts[i].text = (isCurrentFavorite ? "★ " : "★ ") + FormatFavoriteLabel(favoritePath);
+                _favoriteTexts[i].color = isCurrentFavorite ? COL_CURRENT : COL_FAVORITE;
+
+                if (_activePane == BrowserPane.Favorites && idx == _favoriteSel)
+                    _favoriteBgs[i].color = COL_SEL;
+                else if (isCurrentFavorite)
+                    _favoriteBgs[i].color = COL_CURRENT_BG;
+                else if (i % 2 == 1)
+                    _favoriteBgs[i].color = COL_FAVORITE_BG;
+                else
+                    _favoriteBgs[i].color = COL_CLEAR;
+            }
+            else if (_favoriteFolders.Count == 0 && i == 0)
+            {
+                _favoriteTexts[i].text = "(no favorites)";
+                _favoriteTexts[i].color = COL_HINT;
+                _favoriteBgs[i].color = _activePane == BrowserPane.Favorites ? COL_SEL : COL_CLEAR;
+            }
+            else
+            {
+                _favoriteTexts[i].text = "";
+                _favoriteBgs[i].color = COL_CLEAR;
+            }
+        }
+
         for (int i = 0; i < ROWS; i++)
         {
             int idx = _scroll + i;
             if (idx < _entries.Count)
             {
                 var e = _entries[idx];
+                bool isCurrent = IsCurrentSplatEntry(e);
                 string prefix;
                 Color color;
                 if (e.isAnimation)
@@ -890,6 +1153,11 @@ public class VRFileBrowser : MonoBehaviour
                     prefix = "\u25B8 "; // ▸ small triangle for regular folders
                     color = COL_DIR;
                 }
+                else if (isCurrent)
+                {
+                    prefix = "\u2605 "; // ★ star for currently loaded file
+                    color = COL_CURRENT;
+                }
                 else
                 {
                     prefix = "  ";
@@ -899,8 +1167,10 @@ public class VRFileBrowser : MonoBehaviour
                 _rowTexts[i].text  = prefix + e.name;
                 _rowTexts[i].color = color;
 
-                if (idx == _sel)
+                if (_activePane == BrowserPane.Files && idx == _sel)
                     _rowBgs[i].color = COL_SEL;
+                else if (isCurrent)
+                    _rowBgs[i].color = COL_CURRENT_BG;
                 else if (i % 2 == 1)
                     _rowBgs[i].color = COL_ROW_ALT;
                 else
@@ -922,9 +1192,15 @@ public class VRFileBrowser : MonoBehaviour
         if (_entries.Count > 0)
             countInfo += $"   [{_sel + 1}/{_entries.Count}]";
 
+        string favoritesInfo = _favoriteFolders.Count > 0
+            ? $"Favorites: {_favoriteFolders.Count}"
+            : "Favorites: none";
+
+        string paneInfo = _activePane == BrowserPane.Favorites ? "Pane: Favorites" : "Pane: Files";
+
         string controls = XRSettings.isDeviceActive
-            ? "[Stick] Navigate    [Trigger/A] Select    [B] Back    [Y] Close"
-            : "[Arrows] Navigate    [Enter] Select    [Backspace] Back    [Esc/Tab] Close";
+            ? "[Stick] Navigate    [Trigger or A] Select    [B] Back    [Y] Close    [L-Stick Click] Favorite +/-"
+            : "[WASD/Arrows] Navigate    [Enter] Select    [Backspace] Back    [Esc/Tab] Close    [F] Favorite +/-";
 
         string movieInfo = "";
         if (_movieState == MovieState.Playing && cycler != null)
@@ -935,7 +1211,7 @@ public class VRFileBrowser : MonoBehaviour
             movieInfo = $"   |   Movie: Loading {_movieLoadedCount}/{_movieTotalCount} ({pct:F0}%)";
         }
 
-        _hintText.text = $"{countInfo}\n{controls}{movieInfo}";
+        _hintText.text = $"{countInfo}   |   {favoritesInfo}   |   {paneInfo}\n{controls}{movieInfo}";
         UpdateHelpText();
         UpdatePreview();
     }
@@ -969,10 +1245,11 @@ public class VRFileBrowser : MonoBehaviour
 
         _helpText.text = XRSettings.isDeviceActive
             ? "Browser\n"
-            + "R-Stick click: open / close\n"
-            + "Stick: browse list\n"
+            + "Y: open / close\n"
+            + "Stick: browse / switch pane\n"
             + "Trigger / A: open / load\n"
             + "B: parent folder\n"
+            + "L-Stick click: add/remove favorite\n"
             + "X: toggle preload\n"
             + "Y: start movie\n\n"
             + "Locomotion\n"
@@ -990,17 +1267,18 @@ public class VRFileBrowser : MonoBehaviour
             + movieStatus
             : "Browser\n"
             + "Esc / Tab: open / close\n"
-            + "Up / Down: browse list\n"
+            + "WASD / Arrows: browse / switch pane\n"
             + "Enter: open / load\n"
             + "Backspace: parent folder\n"
+            + "F: add/remove favorite\n"
             + "P: toggle preload\n"
             + "M: start / stop movie\n\n"
             + "Movie Playback\n"
             + "Left / Right: FPS -/+\n"
             + "M: stop movie\n\n"
             + "Scene\n"
-            + "Mouse: look    WASD: move\n"
-            + "Space / C: up / down\n"
+            + "Mouse: look / drag    WASD: move\n"
+            + "Shift: sprint    Space / C: up / down\n"
             + "R / F: next / previous splat\n"
             + "Q / E: rotate splat\n"
             + "Home: reset    End: flip\n\n"
@@ -1112,6 +1390,12 @@ public class VRFileBrowser : MonoBehaviour
         if (_sel >= _scroll + ROWS)   _scroll = _sel - ROWS + 1;
     }
 
+    void EnsureFavoriteVisible()
+    {
+        if (_favoriteSel < _favoriteScroll) _favoriteScroll = _favoriteSel;
+        if (_favoriteSel >= _favoriteScroll + ROWS) _favoriteScroll = _favoriteSel - ROWS + 1;
+    }
+
     static string TruncatePath(string p, int maxLen)
     {
         if (p.Length <= maxLen) return p;
@@ -1126,7 +1410,6 @@ public class VRFileBrowser : MonoBehaviour
         if (cam == null) return;
 
         Vector3 fwd = cam.transform.forward;
-        fwd.y = 0f;
         if (fwd.sqrMagnitude < 0.001f) fwd = Vector3.forward;
         fwd.Normalize();
 
@@ -1161,6 +1444,22 @@ public class VRFileBrowser : MonoBehaviour
         float leftY = ReadStickY(XRNode.LeftHand);
         float rightY = ReadStickY(XRNode.RightHand);
         return Mathf.Abs(leftY) >= Mathf.Abs(rightY) ? leftY : rightY;
+    }
+
+    static float ReadNavigationX()
+    {
+        float leftX = ReadStickX(XRNode.LeftHand);
+        float rightX = ReadStickX(XRNode.RightHand);
+        return Mathf.Abs(leftX) >= Mathf.Abs(rightX) ? leftX : rightX;
+    }
+
+    static float ReadStickX(XRNode node)
+    {
+        var devs = new List<InputDevice>();
+        InputDevices.GetDevicesAtXRNode(node, devs);
+        if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+            return v.x;
+        return 0f;
     }
 
     static float ReadStickY(XRNode node)
