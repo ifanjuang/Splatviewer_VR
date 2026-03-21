@@ -10,8 +10,8 @@ https://github.com/user-attachments/assets/4665c9fa-1f44-4b2c-a258-9eb19ebe854e
 
 - A dedicated Unity project at `projects/Splatviewer_VR`.
 - Runtime loading for splat files instead of requiring prebuilt Unity assets.
-- VR locomotion and controller-driven navigation.
-- File cycling and browser support for browsing splat files in-headset.
+- VR locomotion, in-scene splat manipulation, and desktop fallback controls.
+- File cycling and a world-space browser with favorites, preload control, and movie playback.
 - Windows release builds under `projects/Splatviewer_VR/Release/`.
 
 ## Repository Layout
@@ -25,10 +25,12 @@ https://github.com/user-attachments/assets/4665c9fa-1f44-4b2c-a258-9eb19ebe854e
 - Runtime loading of `.ply`, `.spz`, `.spx`, and bundled PlayCanvas `.sog` splat files.
 - Command-line file opening for `.ply`, `.spz`, `.spx`, and `.sog` shell associations.
 - OpenXR-based VR support.
-- Smooth locomotion and snap turn.
-- Controller buttons for moving between splat files.
+- Smooth locomotion with continuous turning and vertical fly movement.
+- Runtime splat rotation, reset, flip, and uniform scaling in both VR and desktop modes.
+- Controller and keyboard shortcuts for moving between splat files.
+- In-world file browser with favorites, current-file tracking, and direct folder browsing.
 - Browser preload caching with a configurable RAM budget.
-- Folder movie mode with adjustable playback FPS.
+- Folder movie mode with progressive loading and adjustable playback FPS.
 - Full desktop mode when running without a headset.
 - Fullscreen windowed startup for desktop and VR mirror view.
 
@@ -37,20 +39,49 @@ https://github.com/user-attachments/assets/4665c9fa-1f44-4b2c-a258-9eb19ebe854e
 ### VR
 
 - Left stick: move.
-- Right stick X: snap turn.
+- Right stick X: continuous turn.
 - Right stick Y: move up and down.
 - Right controller `B` / `secondaryButton`: next splat.
 - Right controller `A` / `primaryButton`: previous splat.
+
+#### VR file browser
+
+- Left controller `Y`: open / close browser.
+- Left or right stick: browse entries and switch pane.
+- Left or right trigger, or right controller `A`: open folder / load file.
+- Right controller `B`: go to parent folder.
+- Left stick click: add / remove favorite.
+- Left controller `X`: toggle preload caching.
+- Right stick click: start movie mode from the current folder.
+- During movie playback, left stick left / right: decrease / increase FPS.
+- During movie playback, left controller `Y`: stop movie playback.
+
+#### VR splat controls
+
+- Hold left grip + use right stick: rotate splat.
+- Hold both grips + move controllers apart / together: scale splat.
+- Hold left grip + left controller `X`: flip splat.
+- Hold left grip + right controller `A`: reset splat rotation.
 
 ### Desktop fallback
 
 - `W A S D`: move.
 - Mouse: look around.
 - `SPACE / C`: move up / down.
+- `Shift`: sprint.
 - `R / F`: next / previous splat.
 - `Q / E`: rotate the current splat.
+- Mouse wheel: scale the current splat.
 - `Home`: reset splat rotation.
 - `End`: flip the current splat.
+- Hold left or right mouse button and move mouse: drag camera.
+- `Esc / Tab`: open / close file browser.
+- `Enter`: open folder / load file in browser.
+- `Backspace`: go to parent folder in browser.
+- `F`: add / remove favorite in browser.
+- `P`: toggle preload caching in browser.
+- `M`: start / stop movie mode.
+- `Left / Right`: decrease / increase movie FPS during playback.
 - `Esc`: release mouse cursor.
 - Left click: capture mouse cursor again.
 
@@ -60,7 +91,7 @@ Open `projects/Splatviewer_VR` in Unity. The project includes `Assets/GSTestScen
 
 Recommended environment:
 
-- Unity 2022.3 LTS.
+- Unity 6 (`6000.0.69f1`).
 - Windows.
 - D3D12-capable GPU.
 - OpenXR-compatible headset runtime.
@@ -102,14 +133,15 @@ The 1.4 Windows release package includes the `.bat` and `.ps1` helpers next to `
 
 ## Building A Release
 
-The packaged Windows player for the current release is built into `projects/Splatviewer_VR/Release/1.4`.
+The packaged Windows player is built from `projects/Splatviewer_VR/Builds/`.
 
-For GitHub releases, use the zip package generated from that folder instead of committing the raw build output. The repository ignores `projects/**/Release/` so source control stays focused on source, project config, and documentation.
+For GitHub releases, publish a zip package generated from that build output. Release archives are written under `projects/Splatviewer_VR/Release/`. The repository ignores `projects/**/Release/` so source control stays focused on source, project config, tracked build artifacts, and documentation.
 
 ## Release Files
 
 - Release notes: `RELEASE_NOTES.md`
-- Release package output: `releases/Splatviewer_VR_v1.4_Windows_x64.zip`
+- Latest GitHub release: `1.6.1`
+- Release package output pattern: `projects/Splatviewer_VR/Release/Splatviewer_VR_v<version>_Windows_x64.zip`
 
 ## Upstream Credits
 
