@@ -35,9 +35,12 @@ public class VRLocomotion : MonoBehaviour
     [Range(0f, 0.5f)]
     public float stickDeadzone = 0.2f;
 
-    [Header("Snap Turn")]
-    [Tooltip("Rotation applied per snap-turn click, in degrees.")]
+    [Header("Turning")]
+    [Tooltip("Snap turn angle in degrees.")]
     public float snapAngle = 45f;
+
+    [Tooltip("Continuous yaw rotation speed in degrees per second from the right stick X axis.")]
+    public float turnSpeed = 90f;
 
     [Header("Mouse Look (desktop fallback)")]
     [Tooltip("Mouse look sensitivity when using the keyboard fallback.")]
@@ -52,8 +55,8 @@ public class VRLocomotion : MonoBehaviour
     // ── Private state ─────────────────────────────────────────────────────────
 
     VRRig  _rig;
-    bool   _snapTurnReady = true;
     float  _mousePitch;   // accumulated vertical mouse look (desktop only)
+    bool   _snapTurnReady = true;
     VRFileBrowser _browser;
     WorldGrabManipulator _grabManipulator;
 
@@ -104,7 +107,7 @@ public class VRLocomotion : MonoBehaviour
         if (XRSettings.isDeviceActive)
         {
             VRMove();
-            VRSnapTurn();
+            VRTurn();
         }
         else
         {
@@ -150,7 +153,7 @@ public class VRLocomotion : MonoBehaviour
             transform.position += move;
     }
 
-    void VRSnapTurn()
+    void VRTurn()
     {
         if (_browser != null && _browser.IsOpen) return;
         if (_grabManipulator != null && _grabManipulator.IsManipulating) return;
@@ -200,7 +203,7 @@ public class VRLocomotion : MonoBehaviour
         if (move.sqrMagnitude > 0.01f)
         {
             bool sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            float speedFactor = sprint ? 1f : (1f / 3f);
+            float speedFactor = sprint ? 2f : (1f / 3f);
             transform.position += move.normalized * moveSpeed * speedFactor * Time.deltaTime;
         }
 
@@ -269,14 +272,32 @@ public class VRLocomotion : MonoBehaviour
             transform.Rotate(0f, angleDegrees, 0f);
     }
 
+    static readonly List<InputDevice> s_devices = new(2);
+
     /// <summary>Reads the primary 2D axis (thumbstick) from an XR controller node.</summary>
     static Vector2 ReadStick(XRNode node)
     {
-        var devices = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(node, devices);
-        if (devices.Count > 0 &&
-            devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 &&
+            s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
             return v;
         return Vector2.zero;
+    }
+
+    /// <summary>Returns the HMD's look direction projected flat onto the XZ plane.</summary>
+    static Vector3 GetHMDForwardFlat()
+    {
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(XRNode.Head, s_devices);
+        if (s_devices.Count > 0 &&
+            s_devices[0].TryGetFeatureValue(CommonUsages.deviceRotation, out Quaternion rot))
+        {
+            Vector3 fwd = rot * Vector3.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude > 0.001f)
+                return fwd.normalized;
+        }
+        return Vector3.forward;
     }
 }

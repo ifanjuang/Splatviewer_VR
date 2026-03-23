@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.XR;
 
 /// <summary>
 /// Runtime rotation control for the GaussianSplat GameObject.
@@ -10,11 +12,21 @@ using UnityEngine;
 ///
 /// Desktop controls:
 ///   Q / E                → rotate around Y axis
+///   Mouse wheel          → uniform scale up/down
+///
+/// Legacy desktop controls are still available:
 ///   Arrow Left / Right   → rotate around Y axis
 ///   Arrow Up / Down      → rotate around X axis
 ///   , / .                → rotate around Z axis
 ///   Home                 → reset to original rotation
 ///   End                  → flip upside down
+///
+/// VR controls (hold LEFT GRIP, then use RIGHT STICK):
+///   Right stick X        → rotate around Y
+///   Right stick Y        → rotate around X
+///   Left  primary button (X) while holding left grip → flip upside down
+///   Right primary button (A) while holding left grip → reset rotation
+///   Both grips + move controllers closer/farther → uniform scale down/up
 /// </summary>
 [DefaultExecutionOrder(-200)]
 public class SplatRotator : MonoBehaviour
@@ -23,6 +35,21 @@ public class SplatRotator : MonoBehaviour
     [Tooltip("Degrees per second when holding a key.")]
     public float rotationSpeed = 45f;
 
+    [Header("VR Scaling")]
+    [Tooltip("Grip amount required before a controller counts as 'held'.")]
+    [Range(0.1f, 1f)]
+    public float gripThreshold = 0.5f;
+
+    [Tooltip("Minimum uniform scale allowed for the splat object.")]
+    public float minUniformScale = 0.05f;
+
+    [Tooltip("Maximum uniform scale allowed for the splat object.")]
+    public float maxUniformScale = 20f;
+
+    [Header("Desktop Scaling")]
+    [Tooltip("Uniform scale multiplier applied per mouse wheel notch in desktop mode.")]
+    public float mouseWheelScaleStep = 0.1f;
+
     [Header("Saved Rotation")]
     [Tooltip("Rotation applied at startup. Set this in the Inspector to bake a corrected orientation.")]
     public Vector3 startEuler = new Vector3(180f, 0f, 0f);
@@ -30,6 +57,11 @@ public class SplatRotator : MonoBehaviour
     // ── Private ───────────────────────────────────────────────────────────────
 
     Quaternion _originalRotation;
+    bool _flipButtonUsed;
+    bool _resetButtonUsed;
+    bool _isScaling;
+    float _scaleStartDistance;
+    Vector3 _scaleStartLocalScale;
     VRFileBrowser _browser;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -43,11 +75,81 @@ public class SplatRotator : MonoBehaviour
 
     void Update()
     {
-        // VR rotation is handled by WorldGrabManipulator — skip entirely in VR
         if (UnityEngine.XR.XRSettings.isDeviceActive)
-            return;
+            VRRotate();
+        else
+            KeyboardRotate();
+    }
 
-        KeyboardRotate();
+    // ── VR rotation ───────────────────────────────────────────────────────────
+
+    void VRRotate()
+    {
+        if (_browser != null && _browser.IsOpen) return;
+
+        // Require left grip held as a "modifier" to avoid clashing with locomotion
+        float leftGrip = ReadAxis1D(XRNode.LeftHand, CommonUsages.grip);
+        float rightGrip = ReadAxis1D(XRNode.RightHand, CommonUsages.grip);
+
+        if (leftGrip >= gripThreshold && rightGrip >= gripThreshold)
+        {
+            HandleVRScaleGesture();
+            _flipButtonUsed = false;
+            _resetButtonUsed = false;
+            return;
+        }
+
+        _isScaling = false;
+
+        if (leftGrip < gripThreshold)
+        {
+            _flipButtonUsed  = false;
+            _resetButtonUsed = false;
+            return;
+        }
+
+        // Left grip held — use right stick for rotation
+        Vector2 rightStick = ReadStick(UnityEngine.XR.XRNode.RightHand);
+        float dt = rotationSpeed * Time.deltaTime;
+
+        if (Mathf.Abs(rightStick.x) > 0.2f)
+            transform.Rotate(Vector3.up, rightStick.x * dt, Space.World);
+        if (Mathf.Abs(rightStick.y) > 0.2f)
+            transform.Rotate(Vector3.right, -rightStick.y * dt, Space.World);
+
+        // X button → flip
+        if (ReadButton(UnityEngine.XR.XRNode.LeftHand, UnityEngine.XR.CommonUsages.primaryButton))
+        {
+            if (!_flipButtonUsed) { FlipUpsideDown(); _flipButtonUsed = true; }
+        }
+        else _flipButtonUsed = false;
+
+        // A button → reset
+        if (ReadButton(UnityEngine.XR.XRNode.RightHand, UnityEngine.XR.CommonUsages.primaryButton))
+        {
+            if (!_resetButtonUsed) { ResetRotation(); _resetButtonUsed = true; }
+        }
+        else _resetButtonUsed = false;
+    }
+
+    void HandleVRScaleGesture()
+    {
+        if (!TryGetControllerDistance(out float controllerDistance))
+        {
+            _isScaling = false;
+            return;
+        }
+
+        if (!_isScaling)
+        {
+            _isScaling = true;
+            _scaleStartDistance = Mathf.Max(controllerDistance, 0.001f);
+            _scaleStartLocalScale = transform.localScale;
+            return;
+        }
+
+        float scaleRatio = controllerDistance / Mathf.Max(_scaleStartDistance, 0.001f);
+        transform.localScale = ClampUniformScale(_scaleStartLocalScale * scaleRatio);
     }
 
     // ── Keyboard rotation ─────────────────────────────────────────────────────
@@ -56,6 +158,8 @@ public class SplatRotator : MonoBehaviour
     {
         if (_browser != null && _browser.IsOpen)
             return;
+
+        HandleMouseWheelScale();
 
         float dt = rotationSpeed * Time.deltaTime;
 
@@ -70,6 +174,32 @@ public class SplatRotator : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.End))  FlipUpsideDown();
         if (Input.GetKeyDown(KeyCode.Home)) ResetRotation();
+    }
+
+    void HandleMouseWheelScale()
+    {
+        float scroll = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(scroll) < 0.01f)
+            return;
+
+        float scaleMultiplier = 1f - scroll * mouseWheelScaleStep;
+        if (scaleMultiplier <= 0.01f)
+            scaleMultiplier = 0.01f;
+
+        transform.localScale = ClampUniformScale(transform.localScale * scaleMultiplier);
+    }
+
+    Vector3 ClampUniformScale(Vector3 targetScale)
+    {
+        float maxComponent = Mathf.Max(targetScale.x, Mathf.Max(targetScale.y, targetScale.z));
+        float minComponent = Mathf.Min(targetScale.x, Mathf.Min(targetScale.y, targetScale.z));
+
+        if (maxComponent > maxUniformScale && maxComponent > 0f)
+            targetScale *= maxUniformScale / maxComponent;
+        if (minComponent < minUniformScale && minComponent > 0f)
+            targetScale *= minUniformScale / minComponent;
+
+        return targetScale;
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -99,5 +229,61 @@ public class SplatRotator : MonoBehaviour
     {
         startEuler = transform.localEulerAngles;
         Debug.Log($"[SplatRotator] Saved rotation: {startEuler}");
+    }
+
+    // ── XR helpers ────────────────────────────────────────────────────────────
+
+    static readonly List<InputDevice> s_devices = new(2);
+
+    static Vector2 ReadStick(XRNode node)
+    {
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 &&
+            s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+            return v;
+        return Vector2.zero;
+    }
+
+    static float ReadAxis1D(XRNode node, InputFeatureUsage<float> usage)
+    {
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(usage, out float v))
+            return v;
+        return 0f;
+    }
+
+    static bool ReadButton(XRNode node, InputFeatureUsage<bool> usage)
+    {
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(usage, out bool v))
+            return v;
+        return false;
+    }
+
+    static bool TryReadDevicePosition(XRNode node, out Vector3 position)
+    {
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(CommonUsages.devicePosition, out position))
+            return true;
+
+        position = default;
+        return false;
+    }
+
+    static bool TryGetControllerDistance(out float distance)
+    {
+        if (TryReadDevicePosition(XRNode.LeftHand, out Vector3 leftPos) &&
+            TryReadDevicePosition(XRNode.RightHand, out Vector3 rightPos))
+        {
+            distance = Vector3.Distance(leftPos, rightPos);
+            return true;
+        }
+
+        distance = 0f;
+        return false;
     }
 }
