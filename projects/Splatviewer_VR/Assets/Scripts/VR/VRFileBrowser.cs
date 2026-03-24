@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using GaussianSplatting.Runtime;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
@@ -121,6 +122,7 @@ public class VRFileBrowser : MonoBehaviour
     Text _previewNameText;
     Text _previewPlayIcon;
     string _lastThumbnailPath;
+    string _preferredFilePath;
     static Font _font;
 
     // ── Input state ───────────────────────────────────────────────────────────
@@ -168,6 +170,7 @@ public class VRFileBrowser : MonoBehaviour
 
         BuildUI();
         _root.SetActive(false);
+        ApplyHighQualitySettings();
     }
 
     void Update()
@@ -193,7 +196,17 @@ public class VRFileBrowser : MonoBehaviour
                 else
                 {
                     _movieState = MovieState.Idle;
-                    Debug.LogWarning("[VRFileBrowser] Movie loading failed");
+                    string error = cycler != null && cycler.loader != null ? cycler.loader.MovieLastError : null;
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        Debug.LogWarning($"[VRFileBrowser] Movie loading failed: {error}");
+                        if (_pathText != null)
+                            _pathText.text = $"Movie load failed: {error}";
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[VRFileBrowser] Movie loading failed");
+                    }
                 }
                 UpdateHelpText();
             }
@@ -261,6 +274,12 @@ public class VRFileBrowser : MonoBehaviour
         _root.SetActive(IsOpen);
         if (IsOpen)
         {
+            if (loader != null && !string.IsNullOrWhiteSpace(loader.CurrentFilePath))
+            {
+                _currentPath = Path.GetDirectoryName(loader.CurrentFilePath);
+                _preferredFilePath = loader.CurrentFilePath;
+            }
+
             PositionInFront();
             Navigate(_currentPath);
         }
@@ -276,6 +295,23 @@ public class VRFileBrowser : MonoBehaviour
     {
         _currentPath = string.IsNullOrWhiteSpace(path) ? null : path;
         startPath = _currentPath ?? string.Empty;
+        _preferredFilePath = null;
+
+        if (IsOpen)
+            Navigate(_currentPath);
+    }
+
+    public void SetCurrentFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            SetCurrentFolder(null);
+            return;
+        }
+
+        _currentPath = Path.GetDirectoryName(filePath);
+        startPath = _currentPath ?? string.Empty;
+        _preferredFilePath = filePath;
 
         if (IsOpen)
             Navigate(_currentPath);
@@ -391,10 +427,10 @@ public class VRFileBrowser : MonoBehaviour
         bool pressed = false;
         if (XRSettings.isDeviceActive)
         {
-            var devs = new List<InputDevice>();
-            InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, devs);
-            if (devs.Count > 0)
-                devs[0].TryGetFeatureValue(CommonUsages.primary2DAxisClick, out pressed);
+            s_devices.Clear();
+            InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, s_devices);
+            if (s_devices.Count > 0)
+                s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxisClick, out pressed);
         }
         else
         {
@@ -469,6 +505,16 @@ public class VRFileBrowser : MonoBehaviour
         }
     }
 
+    void ApplyHighQualitySettings()
+    {
+        var gs = FindAnyObjectByType<GaussianSplatRenderer>();
+        if (gs == null) return;
+
+        gs.m_SHOrder = 3;
+        gs.m_AlphaClipThreshold = 1f / 255f;
+        gs.m_SplatEdgeSharpness = 1.0f;
+    }
+
     void HandleMovieFpsAdjust()
     {
         if (cycler == null) return;
@@ -477,9 +523,9 @@ public class VRFileBrowser : MonoBehaviour
         if (XRSettings.isDeviceActive)
         {
             // Use left stick X for FPS adjustment
-            var devs = new List<InputDevice>();
-            InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, devs);
-            if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+            s_devices.Clear();
+            InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, s_devices);
+            if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
                 rx = v.x;
         }
         else
@@ -598,6 +644,8 @@ public class VRFileBrowser : MonoBehaviour
         if (cycler != null)
             cycler.StopMovie();
         _movieState = MovieState.Idle;
+        _movieLoadedCount = 0;
+        _movieTotalCount = 0;
         UpdateHelpText();
     }
 
@@ -729,6 +777,8 @@ public class VRFileBrowser : MonoBehaviour
             }
         }
 
+        TrySelectPreferredFile();
+
         UpdatePath();
         UpdateRows();
     }
@@ -750,6 +800,29 @@ public class VRFileBrowser : MonoBehaviour
             return count;
         }
         catch { return 0; }
+    }
+
+    void TrySelectPreferredFile()
+    {
+        if (string.IsNullOrEmpty(_preferredFilePath) || string.IsNullOrEmpty(_currentPath))
+            return;
+
+        string preferredFolder = Path.GetDirectoryName(_preferredFilePath);
+        if (!string.Equals(preferredFolder, _currentPath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            if (_entries[i].isDir)
+                continue;
+
+            if (string.Equals(_entries[i].path, _preferredFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _sel = i;
+                EnsureVisible();
+                return;
+            }
+        }
     }
 
     void SelectCurrent()
@@ -792,6 +865,8 @@ public class VRFileBrowser : MonoBehaviour
                     _pathText.color = new Color(1f, 0.7f, 0.2f);
                     // Still attempt the load — the warning is informational
                 }
+
+                _preferredFilePath = entry.path;
 
                 // Reset world to neutral before loading new scene
                 if (worldGrab != null)
@@ -1070,7 +1145,9 @@ public class VRFileBrowser : MonoBehaviour
         else
             _smoothedFps = Mathf.Lerp(_smoothedFps, currentFps, 0.1f);
 
-        _fpsText.text = $"FPS {_smoothedFps:F0}";
+        // Only update the UI text every ~15 frames to avoid per-frame string allocation
+        if (Time.frameCount % 15 == 0)
+            _fpsText.text = $"FPS {_smoothedFps:F0}";
     }
 
     bool IsCurrentSplatEntry(Entry entry)
@@ -1263,6 +1340,11 @@ public class VRFileBrowser : MonoBehaviour
             + "Movie Playback\n"
             + "L-Stick left/right: FPS -/+\n"
             + "Y: stop movie\n\n"
+            + "Scene\n"
+            + "L-Grip + R-Stick: rotate splat\n"
+            + "Both grips + move hands: scale splat\n"
+            + "L-Grip + X: flip\n"
+            + "L-Grip + A: reset rotation\n\n"
             + preloadStatus + "\n"
             + movieStatus
             : "Browser\n"
@@ -1421,11 +1503,13 @@ public class VRFileBrowser : MonoBehaviour
 
     // ── XR Input Helpers ──────────────────────────────────────────────────────
 
+    static readonly List<InputDevice> s_devices = new(2);
+
     static bool ReadButton(XRNode node, InputFeatureUsage<bool> usage)
     {
-        var devs = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(node, devs);
-        if (devs.Count > 0 && devs[0].TryGetFeatureValue(usage, out bool v))
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(usage, out bool v))
             return v;
         return false;
     }
@@ -1455,27 +1539,27 @@ public class VRFileBrowser : MonoBehaviour
 
     static float ReadStickX(XRNode node)
     {
-        var devs = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(node, devs);
-        if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
             return v.x;
         return 0f;
     }
 
     static float ReadStickY(XRNode node)
     {
-        var devs = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(node, devs);
-        if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 v))
             return v.y;
         return 0f;
     }
 
     static bool ReadTrigger(XRNode node)
     {
-        var devs = new List<InputDevice>();
-        InputDevices.GetDevicesAtXRNode(node, devs);
-        if (devs.Count > 0 && devs[0].TryGetFeatureValue(CommonUsages.trigger, out float v))
+        s_devices.Clear();
+        InputDevices.GetDevicesAtXRNode(node, s_devices);
+        if (s_devices.Count > 0 && s_devices[0].TryGetFeatureValue(CommonUsages.trigger, out float v))
             return v > 0.5f;
         return false;
     }

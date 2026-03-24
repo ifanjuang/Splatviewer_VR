@@ -360,6 +360,8 @@ public class SplatCycler : MonoBehaviour
 
     // ── Input Handling ────────────────────────────────────────────────────────
 
+    static readonly List<InputDevice> s_devices = new(2);
+
     void HandleVRInput()
     {
         // Don't consume A/B when file browser is open (or just closed this frame)
